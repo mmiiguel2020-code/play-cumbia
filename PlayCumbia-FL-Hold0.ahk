@@ -6,15 +6,11 @@ SetKeyDelay -1, -1
 SetTitleMatchMode 2
 
 ; =========================================================
-; FL Studio — tecla física 9 + Play hold/gate
+; FL Studio — tecla física 9 + Play hold/gate (baja latencia)
 ;
-;   Mantener 9 → Play + dispara C6 (tecla 0 del typing keyboard)
+;   Mantener 9 → Play + dispara C6 (tecla 0)
 ;   Soltar 9   → Stop
-;
-; Por qué enviar 0 y no 9:
-;   En el teclado piano de FL, 0 = C6 y 9 = A#5.
-;   Antes, con la tecla 0, el doble disparo C6→C6 iba perfecto.
-;   Con 9 se oía A#5→C6. Ahora la física es 9, la nota es C6.
+; Sin Sleep antes del sample: el C6 sale al instante.
 ; =========================================================
 
 #HotIf WinActive("ahk_exe FL64.exe") || WinActive("ahk_class TFruityLoopsMainForm")
@@ -28,12 +24,10 @@ $9::
         return
     busy9 := true
 
-    ; Sample en C6 (como cuando usábamos el 0)
+    ; Sample YA (sin Sleep)
     SendInput "{Blind}{0 down}"
-    Sleep 50
+    ; Play justo después; re-assert inmediato por si Space pisa el hold
     ControlSend "{Space}", , "A"
-    Sleep 30
-    ; Re-assert C6 (el mismo doble toque que antes funcionaba)
     SendInput "{Blind}{0 down}"
 
     KeyWait "9"
@@ -48,5 +42,5 @@ $9::
 ^!r::Reload()
 ^!q::ExitApp()
 
-TrayTip("9 = hold Play + sample C6`nCtrl+Alt+R = recargar", "PlayCumbia FL")
+TrayTip("9 = sample C6 + Play (sin delay)`nCtrl+Alt+R = recargar", "PlayCumbia FL")
 SetTimer(() => TrayTip(), -2500)
