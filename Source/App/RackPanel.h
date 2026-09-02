@@ -47,12 +47,6 @@ private:
     FxRack& rack;
     juce::Label title;
     juce::Label hint;
-    SignalLed inLedL;
-    SignalLed inLedR;
-    SignalLed outLedL;
-    SignalLed outLedR;
-    juce::Label inLabel;
-    juce::Label outLabel;
     juce::TextButton masterMuteButton{ "MUTE MASTER" };
     SignalLed masterLed;
     std::array<SlotUi, FxRack::slotCount> slots;

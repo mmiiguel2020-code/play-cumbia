@@ -6,20 +6,23 @@ MiguelLookAndFeel::MiguelLookAndFeel()
               MiguelColours::background());
     setColour(juce::Label::textColourId, MiguelColours::text());
     setColour(juce::TextButton::buttonColourId, MiguelColours::panelRaised());
-    setColour(juce::TextButton::buttonOnColourId, MiguelColours::cyan());
+    setColour(juce::TextButton::buttonOnColourId, MiguelColours::blue());
     setColour(juce::TextButton::textColourOffId, MiguelColours::text());
     setColour(juce::TextButton::textColourOnId, MiguelColours::background());
     setColour(juce::ComboBox::backgroundColourId, MiguelColours::panelRaised());
     setColour(juce::ComboBox::outlineColourId, MiguelColours::border());
     setColour(juce::ComboBox::textColourId, MiguelColours::text());
-    setColour(juce::ComboBox::arrowColourId, MiguelColours::cyan());
+    setColour(juce::ComboBox::arrowColourId, MiguelColours::blue());
     setColour(juce::PopupMenu::backgroundColourId, MiguelColours::panel());
     setColour(juce::PopupMenu::textColourId, MiguelColours::text());
     setColour(juce::PopupMenu::highlightedBackgroundColourId,
-              MiguelColours::cyan().withAlpha(0.72f));
-    setColour(juce::Slider::trackColourId, MiguelColours::cyan());
-    setColour(juce::Slider::thumbColourId, MiguelColours::text());
-    setColour(juce::Slider::rotarySliderFillColourId, MiguelColours::cyan());
+              MiguelColours::green().withAlpha(0.78f));
+    setColour(juce::TextEditor::highlightColourId,
+              MiguelColours::green().withAlpha(0.40f));
+    setColour(juce::ListBox::backgroundColourId, MiguelColours::panel());
+    setColour(juce::Slider::trackColourId, MiguelColours::blue());
+    setColour(juce::Slider::thumbColourId, MiguelColours::lilac());
+    setColour(juce::Slider::rotarySliderFillColourId, MiguelColours::lilac());
     setColour(juce::Slider::rotarySliderOutlineColourId,
               MiguelColours::panelHighlight());
     setColour(juce::Slider::textBoxTextColourId, MiguelColours::text());
@@ -31,11 +34,11 @@ MiguelLookAndFeel::MiguelLookAndFeel()
               MiguelColours::text());
     setColour(juce::TreeView::backgroundColourId, MiguelColours::panel());
     setColour(juce::ScrollBar::thumbColourId,
-              MiguelColours::cyan().withAlpha(0.75f));
+              MiguelColours::purple().withAlpha(0.8f));
     setColour(juce::TextEditor::backgroundColourId, MiguelColours::panel());
     setColour(juce::TextEditor::textColourId, MiguelColours::text());
     setColour(juce::TextEditor::outlineColourId, MiguelColours::border());
-    setColour(juce::TextEditor::focusedOutlineColourId, MiguelColours::cyan());
+    setColour(juce::TextEditor::focusedOutlineColourId, MiguelColours::blue());
 }
 
 void MiguelLookAndFeel::drawButtonBackground(
@@ -54,7 +57,7 @@ void MiguelLookAndFeel::drawButtonBackground(
         base.darker(0.12f), bounds.getCentreX(), bounds.getBottom(), false);
     graphics.setGradientFill(gradient);
     graphics.fillRoundedRectangle(bounds, 5.0f);
-    graphics.setColour((button.getToggleState() ? MiguelColours::cyan()
+    graphics.setColour((button.getToggleState() ? MiguelColours::lilac()
                                                  : MiguelColours::border())
                            .withAlpha(isMouseOver ? 0.95f : 0.72f));
     graphics.drawRoundedRectangle(bounds, 5.0f, 1.0f);
@@ -216,7 +219,7 @@ void MiguelLookAndFeel::drawComboBox(
         MiguelColours::panel().darker(0.06f), 0.0f, bounds.getBottom(), false);
     graphics.setGradientFill(gradient);
     graphics.fillRoundedRectangle(bounds, 4.0f);
-    graphics.setColour(box.hasKeyboardFocus(true) ? MiguelColours::cyan()
+    graphics.setColour(box.hasKeyboardFocus(true) ? MiguelColours::blue()
                                                    : MiguelColours::border());
     graphics.drawRoundedRectangle(bounds, 4.0f, 1.0f);
 
@@ -230,7 +233,18 @@ void MiguelLookAndFeel::drawComboBox(
                       arrowArea.getCentreY() - 2.0f,
                       arrowArea.getCentreX(),
                       arrowArea.getCentreY() + 3.0f);
-    graphics.setColour(MiguelColours::cyan()
+    graphics.setColour(MiguelColours::blue()
                            .withAlpha(isButtonDown ? 1.0f : 0.85f));
     graphics.fillPath(arrow);
+}
+
+void MiguelLookAndFeel::drawMenuBarBackground(juce::Graphics& graphics,
+                                              int width,
+                                              int height,
+                                              bool /*isMouseOverBar*/,
+                                              juce::MenuBarComponent&)
+{
+    graphics.fillAll(MiguelColours::panel());
+    graphics.setColour(MiguelColours::purple().withAlpha(0.35f));
+    graphics.fillRect(0, height - 1, width, 1);
 }

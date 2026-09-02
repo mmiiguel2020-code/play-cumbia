@@ -43,7 +43,7 @@ FxRack::FxRack()
 {
     amounts[static_cast<size_t>(FxSlot::volume)].store(1.0f);
     amounts[static_cast<size_t>(FxSlot::velocity)].store(0.49f);
-    amounts[static_cast<size_t>(FxSlot::efecto)].store(1.0f);
+    amounts[static_cast<size_t>(FxSlot::efecto)].store(0.0f);
 }
 
 void FxRack::prepare(double sampleRate, int samplesPerBlock)
@@ -64,6 +64,15 @@ void FxRack::prepare(double sampleRate, int samplesPerBlock)
         line.fill(0.0f);
     doubleWrite = 0;
     doublePhase = 0.0;
+    reverb.reset();
+    juce::Reverb::Parameters params;
+    params.roomSize = 0.35f;
+    params.damping = 0.45f;
+    params.wetLevel = 0.0f;
+    params.dryLevel = 1.0f;
+    params.width = 1.0f;
+    reverb.setParameters(params);
+    reverb.setSampleRate(activeSampleRate);
 }
 
 void FxRack::setAmount(FxSlot slot, float amount01)
@@ -121,6 +130,60 @@ bool FxRack::active(FxSlot slot) const
     return !isMuted(slot) && getAmount(slot) > 0.001f;
 }
 
+void FxRack::applyDelay(juce::AudioBuffer<float>& buffer)
+{
+    const auto channels = juce::jmin(2, buffer.getNumChannels());
+    const auto samples = buffer.getNumSamples();
+    const auto amount = getAmount(FxSlot::delay);
+    const auto delayMs = 8.0f + amount * 28.0f;
+    const auto maxIndex = static_cast<int>(delayLine[0].size());
+    const auto delaySamples = juce::jlimit(
+        1, maxIndex - 2,
+        static_cast<int>(activeSampleRate * delayMs * 0.001));
+    const auto feedback = 0.05f + amount * 0.14f;
+    const auto mix = 0.28f + amount * 0.32f;
+    for (int i = 0; i < samples; ++i)
+    {
+        auto read = delayWrite - delaySamples;
+        while (read < 0)
+            read += maxIndex;
+        for (int ch = 0; ch < channels; ++ch)
+        {
+            auto* data = buffer.getWritePointer(ch);
+            auto& line = delayLine[static_cast<size_t>(ch)];
+            const auto delayed = line[static_cast<size_t>(read)];
+            line[static_cast<size_t>(delayWrite)] =
+                data[i] + delayed * feedback;
+            data[i] = data[i] * (1.0f - mix) + delayed * mix;
+        }
+        delayWrite = (delayWrite + 1) % maxIndex;
+    }
+    updateLeds(FxSlot::delay, buffer, samples);
+}
+
+void FxRack::applyReverb(juce::AudioBuffer<float>& buffer)
+{
+    const auto channels = juce::jmin(2, buffer.getNumChannels());
+    const auto samples = buffer.getNumSamples();
+    const auto amount = getAmount(FxSlot::efecto);
+    juce::Reverb::Parameters params;
+    params.roomSize = juce::jlimit(
+        0.0f, 1.0f, (0.22f + amount * 0.68f) * 1.30f);
+    params.damping = 0.68f - amount * 0.10f;
+    params.wetLevel = 0.07f + amount * 0.22f;
+    params.dryLevel = 1.0f;
+    params.width = 0.72f;
+    params.freezeMode = 0.0f;
+    reverb.setParameters(params);
+    if (channels >= 2)
+        reverb.processStereo(buffer.getWritePointer(0),
+                             buffer.getWritePointer(1), samples);
+    else
+        reverb.processMono(buffer.getWritePointer(0), samples);
+    buffer.applyGain(1.0f / (1.0f + params.wetLevel));
+    updateLeds(FxSlot::efecto, buffer, samples);
+}
+
 void FxRack::updateLeds(FxSlot slot, const juce::AudioBuffer<float>& buffer,
                         int samples)
 {
@@ -156,17 +219,6 @@ void FxRack::process(juce::AudioBuffer<float>& buffer)
     {
         buffer.clear();
         return;
-    }
-
-    const auto wet = getAmount(FxSlot::efecto);
-    const auto useWet = !isMuted(FxSlot::efecto) && wet > 0.001f && wet < 0.999f;
-    if (useWet)
-    {
-        if (dryBuffer.getNumChannels() < channels
-            || dryBuffer.getNumSamples() < samples)
-            dryBuffer.setSize(channels, samples, false, false, true);
-        for (int ch = 0; ch < channels; ++ch)
-            dryBuffer.copyFrom(ch, 0, buffer, ch, 0, samples);
     }
 
     if (active(FxSlot::filterHp) || active(FxSlot::filterLp))
@@ -205,7 +257,7 @@ void FxRack::process(juce::AudioBuffer<float>& buffer)
 
     if (active(FxSlot::distortion))
     {
-        const auto drive = 1.0f + getAmount(FxSlot::distortion) * 4.5f;
+        const auto drive = 1.0f + getAmount(FxSlot::distortion) * 9.0f;
         const auto norm = std::tanh(drive);
         for (int ch = 0; ch < channels; ++ch)
         {
@@ -253,33 +305,7 @@ void FxRack::process(juce::AudioBuffer<float>& buffer)
     }
 
     if (active(FxSlot::delay))
-    {
-        const auto amount = getAmount(FxSlot::delay);
-        const auto delayMs = 25.0f + amount * 420.0f;
-        const auto maxIndex = static_cast<int>(delayLine[0].size());
-        const auto delaySamples = juce::jlimit(
-            1, maxIndex - 2,
-            static_cast<int>(activeSampleRate * delayMs * 0.001));
-        const auto feedback = 0.18f + amount * 0.42f;
-        const auto mix = 0.12f + amount * 0.45f;
-        for (int i = 0; i < samples; ++i)
-        {
-            auto read = delayWrite - delaySamples;
-            while (read < 0)
-                read += maxIndex;
-            for (int ch = 0; ch < channels; ++ch)
-            {
-                auto* data = buffer.getWritePointer(ch);
-                auto& line = delayLine[static_cast<size_t>(ch)];
-                const auto delayed = line[static_cast<size_t>(read)];
-                line[static_cast<size_t>(delayWrite)] =
-                    data[i] + delayed * feedback;
-                data[i] = data[i] * (1.0f - mix) + delayed * mix;
-            }
-            delayWrite = (delayWrite + 1) % maxIndex;
-        }
-        updateLeds(FxSlot::delay, buffer, samples);
-    }
+        applyDelay(buffer);
 
     if (active(FxSlot::exciter))
     {
@@ -326,17 +352,8 @@ void FxRack::process(juce::AudioBuffer<float>& buffer)
         updateLeds(FxSlot::compressor, buffer, samples);
     }
 
-    if (useWet)
-    {
-        for (int ch = 0; ch < channels; ++ch)
-            for (int i = 0; i < samples; ++i)
-            {
-                const auto mixed = dryBuffer.getSample(ch, i) * (1.0f - wet)
-                    + buffer.getSample(ch, i) * wet;
-                buffer.setSample(ch, i, mixed);
-            }
-        updateLeds(FxSlot::efecto, buffer, samples);
-    }
+    if (active(FxSlot::efecto))
+        applyReverb(buffer);
 
     if (!isMuted(FxSlot::volume))
         buffer.applyGain(volumeGain());
@@ -408,7 +425,7 @@ void FxRack::processOnly(FxSlot slot, juce::AudioBuffer<float>& buffer)
         }
         case FxSlot::distortion:
         {
-            const auto drive = 1.0f + getAmount(FxSlot::distortion) * 4.5f;
+            const auto drive = 1.0f + getAmount(FxSlot::distortion) * 9.0f;
             const auto norm = std::tanh(drive);
             for (int ch = 0; ch < channels; ++ch)
             {
@@ -456,34 +473,8 @@ void FxRack::processOnly(FxSlot slot, juce::AudioBuffer<float>& buffer)
             break;
         }
         case FxSlot::delay:
-        {
-            const auto amount = getAmount(FxSlot::delay);
-            const auto delayMs = 25.0f + amount * 420.0f;
-            const auto maxIndex = static_cast<int>(delayLine[0].size());
-            const auto delaySamples = juce::jlimit(
-                1, maxIndex - 2,
-                static_cast<int>(activeSampleRate * delayMs * 0.001));
-            const auto feedback = 0.18f + amount * 0.42f;
-            const auto mix = 0.12f + amount * 0.45f;
-            for (int i = 0; i < samples; ++i)
-            {
-                auto read = delayWrite - delaySamples;
-                while (read < 0)
-                    read += maxIndex;
-                for (int ch = 0; ch < channels; ++ch)
-                {
-                    auto* data = buffer.getWritePointer(ch);
-                    auto& line = delayLine[static_cast<size_t>(ch)];
-                    const auto delayed = line[static_cast<size_t>(read)];
-                    line[static_cast<size_t>(delayWrite)] =
-                        data[i] + delayed * feedback;
-                    data[i] = data[i] * (1.0f - mix) + delayed * mix;
-                }
-                delayWrite = (delayWrite + 1) % maxIndex;
-            }
-            updateLeds(FxSlot::delay, buffer, samples);
+            applyDelay(buffer);
             break;
-        }
         case FxSlot::exciter:
         {
             const auto amount = getAmount(FxSlot::exciter) * 0.35f;
@@ -530,12 +521,8 @@ void FxRack::processOnly(FxSlot slot, juce::AudioBuffer<float>& buffer)
             break;
         }
         case FxSlot::efecto:
-        {
-            const auto wet = getAmount(FxSlot::efecto);
-            buffer.applyGain(wet);
-            updateLeds(FxSlot::efecto, buffer, samples);
+            applyReverb(buffer);
             break;
-        }
         case FxSlot::volume:
             buffer.applyGain(volumeGain());
             updateLeds(FxSlot::volume, buffer, samples);

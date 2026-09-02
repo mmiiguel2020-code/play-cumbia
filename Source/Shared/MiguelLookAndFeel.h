@@ -4,20 +4,22 @@
 
 namespace MiguelColours
 {
-inline juce::Colour background()       { return juce::Colour(0xff1a1a1f); }
-inline juce::Colour panel()            { return juce::Colour(0xff20202a); }
-inline juce::Colour panelRaised()      { return juce::Colour(0xff292934); }
-inline juce::Colour panelHighlight()   { return juce::Colour(0xff343441); }
-inline juce::Colour border()           { return juce::Colour(0xff444553); }
-inline juce::Colour text()             { return juce::Colour(0xfff3f5f7); }
-inline juce::Colour textMuted()        { return juce::Colour(0xffaeb3bd); }
-inline juce::Colour cyan()             { return juce::Colour(0xff3fa9f5); }
-inline juce::Colour green()            { return juce::Colour(0xff45c98a); }
-inline juce::Colour orange()           { return juce::Colour(0xffffa94d); }
-inline juce::Colour purple()           { return juce::Colour(0xffa879ff); }
-inline juce::Colour pink()             { return juce::Colour(0xffff6fae); }
-inline juce::Colour yellow()           { return juce::Colour(0xffffd166); }
-inline juce::Colour danger()           { return juce::Colour(0xffff5f68); }
+inline juce::Colour background()       { return juce::Colour(0xff100e16); }
+inline juce::Colour panel()            { return juce::Colour(0xff1a1624); }
+inline juce::Colour panelRaised()      { return juce::Colour(0xff241e30); }
+inline juce::Colour panelHighlight()   { return juce::Colour(0xff322a42); }
+inline juce::Colour border()           { return juce::Colour(0xff5c4d78); }
+inline juce::Colour text()             { return juce::Colour(0xfff4eefc); }
+inline juce::Colour textMuted()        { return juce::Colour(0xffb8a8cc); }
+inline juce::Colour lilac()            { return juce::Colour(0xffc9b0ea); }
+inline juce::Colour purple()           { return juce::Colour(0xff9b7ad8); }
+inline juce::Colour cyan()             { return juce::Colour(0xff7eb4e0); }
+inline juce::Colour blue()             { return juce::Colour(0xff7eb4e0); }
+inline juce::Colour green()            { return juce::Colour(0xff6ec8a4); }
+inline juce::Colour orange()           { return juce::Colour(0xffc9b0ea); }
+inline juce::Colour pink()             { return juce::Colour(0xffb894d4); }
+inline juce::Colour yellow()           { return juce::Colour(0xffdcc98a); }
+inline juce::Colour danger()           { return juce::Colour(0xffe07080); }
 }
 
 class MiguelLookAndFeel final : public juce::LookAndFeel_V4
@@ -36,6 +38,8 @@ public:
                        bool, bool) override;
     void drawComboBox(juce::Graphics&, int, int, bool, int, int, int, int,
                       juce::ComboBox&) override;
+    void drawMenuBarBackground(juce::Graphics&, int, int, bool,
+                               juce::MenuBarComponent&) override;
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(MiguelLookAndFeel)

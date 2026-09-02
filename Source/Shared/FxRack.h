@@ -54,6 +54,8 @@ private:
                     int samples);
     void decayLeds();
     bool active(FxSlot slot) const;
+    void applyDelay(juce::AudioBuffer<float>& buffer);
+    void applyReverb(juce::AudioBuffer<float>& buffer);
 
     std::array<std::atomic<float>, slotCount> amounts{};
     std::array<std::atomic<bool>, slotCount> mutes{};
@@ -63,6 +65,7 @@ private:
     std::atomic<bool> masterMute{ false };
 
     juce::AudioBuffer<float> dryBuffer;
+    juce::Reverb reverb;
     double activeSampleRate = 44100.0;
     juce::IIRFilter hp[2];
     juce::IIRFilter lp[2];

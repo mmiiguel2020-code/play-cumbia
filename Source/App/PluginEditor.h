@@ -9,6 +9,7 @@
 #include "PluginProcessor.h"
 #include "PrecisionRotarySlider.h"
 #include "RackPanel.h"
+#include "ReferencePiano.h"
 
 #include <array>
 #include <functional>
@@ -47,10 +48,17 @@ private:
     bool hasReading = false;
 };
 
+class PichaBrandBar final : public juce::Component
+{
+public:
+    PichaBrandBar() { setInterceptsMouseClicks(false, false); }
+    void paint(juce::Graphics&) override;
+};
+
 class TabPagePanel final : public juce::Component
 {
 public:
-    explicit TabPagePanel(juce::Colour accentColourToUse = MiguelColours::cyan())
+    explicit TabPagePanel(juce::Colour accentColourToUse = MiguelColours::blue())
         : accentColour(accentColourToUse)
     {
         setOpaque(true);
@@ -77,7 +85,7 @@ class PluginCell final : public juce::Component
 {
 public:
     explicit PluginCell(juce::String titleToUse,
-                        juce::Colour accent = MiguelColours::orange())
+                        juce::Colour accent = MiguelColours::purple())
         : title(std::move(titleToUse)), accentColour(accent)
     {
         setInterceptsMouseClicks(false, true);
@@ -123,7 +131,7 @@ public:
     void filesDropped(const juce::StringArray& files, int, int) override;
 };
 
-class CapturePad final : public juce::Button, private juce::Timer
+class CapturePad final : public juce::Button
 {
 public:
     CapturePad();
@@ -133,13 +141,59 @@ public:
     void clicked() override;
 
 private:
-    void timerCallback() override;
     int mode = 0;
-    bool flash = false;
+};
+
+class PlaySquareButton final : public juce::Button
+{
+public:
+    PlaySquareButton() : juce::Button("play")
+    {
+        setWantsKeyboardFocus(false);
+        setMouseClickGrabsKeyboardFocus(false);
+    }
+
+    void setPlaying(bool shouldPlay)
+    {
+        if (playing == shouldPlay)
+            return;
+        playing = shouldPlay;
+        repaint();
+    }
+
+    void paintButton(juce::Graphics& g, bool over, bool down) override
+    {
+        auto bounds = getLocalBounds().toFloat().reduced(1.5f);
+        auto fill = playing ? MiguelColours::green()
+                            : MiguelColours::panelRaised();
+        if (down)
+            fill = fill.brighter(0.14f);
+        else if (over)
+            fill = fill.brighter(0.08f);
+        g.setColour(fill);
+        g.fillRoundedRectangle(bounds, 5.0f);
+        g.setColour(playing ? MiguelColours::green().darker(0.25f)
+                            : MiguelColours::border());
+        g.drawRoundedRectangle(bounds, 5.0f, 1.2f);
+
+        auto triangle = bounds.reduced(bounds.getWidth() * 0.30f,
+                                       bounds.getHeight() * 0.26f);
+        juce::Path play;
+        play.addTriangle(triangle.getX(), triangle.getY(),
+                         triangle.getX(), triangle.getBottom(),
+                         triangle.getRight(), triangle.getCentreY());
+        g.setColour(playing ? MiguelColours::background()
+                            : MiguelColours::text());
+        g.fillPath(play);
+    }
+
+private:
+    bool playing = false;
 };
 
 class MiguelMusicAssistantAudioProcessorEditor final
     : public juce::AudioProcessorEditor,
+      public juce::MenuBarModel,
       private juce::Timer,
       private juce::MidiKeyboardStateListener,
       private juce::KeyListener
@@ -156,6 +210,9 @@ public:
     void parentHierarchyChanged() override;
     bool keyPressed(const juce::KeyPress&) override;
     bool keyPressed(const juce::KeyPress&, juce::Component*) override;
+    juce::StringArray getMenuBarNames() override;
+    juce::PopupMenu getMenuForIndex(int, const juce::String&) override;
+    void menuItemSelected(int, int) override;
     void syncSessionStateToProcessor();
 
 private:
@@ -178,6 +235,12 @@ private:
     void restoreUiSessionState(const juce::ValueTree& uiState);
     void toggleCapturePad();
     void toggleSampleTrigger();
+    void openSession();
+    void saveSession(bool saveAs);
+    void exportSelectedSamples();
+    void applyWindowChrome();
+    void maximiseWindow();
+    void restoreWindow();
     void handleNoteOn(
         juce::MidiKeyboardState*, int, int midiNote, float velocity) override;
     void handleNoteOff(
@@ -185,13 +248,15 @@ private:
 
     MiguelMusicAssistantAudioProcessor& processor;
     MiguelLookAndFeel miguelLookAndFeel;
+    juce::MenuBarComponent menuBar{ this };
+    PichaBrandBar brandBar;
+    juce::File sessionFile;
 
-    juce::TabbedComponent tabs{ juce::TabbedButtonBar::TabsAtTop };
     CapturePad capturePad;
-    TabPagePanel generatorPage{ MiguelColours::cyan() };
+    TabPagePanel generatorPage{ MiguelColours::blue() };
     TabPagePanel mixPage{ MiguelColours::green() };
-    TabPagePanel libraryPage{ MiguelColours::orange() };
-    TabPagePanel bajoquintoPage{ MiguelColours::purple() };
+    TabPagePanel libraryPage{ MiguelColours::purple() };
+    TabPagePanel bajoquintoPage{ MiguelColours::lilac() };
     TabPagePanel eqPage{ MiguelColours::yellow() };
 
     juce::ComboBox keyBox;
@@ -218,19 +283,19 @@ private:
     MixAnalyzerComponent mixAnalyzer;
 
     juce::Label libraryTitle;
-    PluginCell tunerCell{ "Afinador", MiguelColours::orange() };
-    PluginCell eqCell{ "EQ", MiguelColours::cyan() };
-    PluginCell trimCell{ "Recortar", MiguelColours::pink() };
-    PluginCell fadeInCell{ "Entrada", MiguelColours::green() };
-    PluginCell fadeOutCell{ "Salida", MiguelColours::orange() };
+    PluginCell tunerCell{ "Afinador", MiguelColours::purple() };
+    PluginCell eqCell{ "EQ 7 bandas", MiguelColours::blue() };
+    PluginCell trimCell{ "Recortar", MiguelColours::yellow() };
+    PluginCell fadeInCell{ "Entrada", MiguelColours::blue() };
+    PluginCell fadeOutCell{ "Salida", MiguelColours::lilac() };
     ImportedSampleList importedSampleList;
     juce::TextButton folderButton{ "Agregar samples..." };
     juce::TextButton removeSampleButton{ "Quitar seleccionado" };
     juce::Label folderLabel;
     SampleWaveform sampleWaveform;
-    juce::TextButton samplePlayButton{ "Escuchar" };
+    PlaySquareButton samplePlayButton;
     juce::TextButton sampleLoopButton{ "Loop" };
-    juce::TextButton sampleStopButton{ "Detener" };
+    juce::TextButton sampleReverseButton{ "Rev" };
     juce::TextButton sampleDragButton{ "Mostrar en Explorador" };
     juce::Label sampleInfo;
     juce::Label tunerTitle;
@@ -241,13 +306,15 @@ private:
     PrecisionRotarySlider broncoMaxKnob;
     juce::Label broncoMaxLabel;
     juce::Label sampleEqTitle;
-    juce::Label sampleEqLowLabel;
-    juce::Label sampleEqMidLabel;
-    juce::Label sampleEqHighLabel;
-    std::array<PrecisionRotarySlider, 3> sampleEqKnobs;
+    std::array<juce::Label, MiguelMusicAssistantAudioProcessor::sampleEqBandCount>
+        sampleEqBandLabels;
+    std::array<FineWheelSlider, MiguelMusicAssistantAudioProcessor::sampleEqBandCount>
+        sampleEqSliders;
     juce::TextButton sampleEqResetButton{ "Reset EQ" };
-    PrecisionRotarySlider sampleTrimKnob;
-    juce::Label sampleTrimLabel;
+    PrecisionRotarySlider sampleTrimStartKnob;
+    juce::Label sampleTrimStartLabel;
+    PrecisionRotarySlider sampleTrimEndKnob;
+    juce::Label sampleTrimEndLabel;
     PrecisionRotarySlider sampleFadeInKnob;
     juce::Label sampleFadeInLabel;
     PrecisionRotarySlider sampleFadeOutKnob;
@@ -263,18 +330,17 @@ private:
     juce::Label bajoquintoDescription;
     juce::TextButton layerPlayButton{ "Escuchar" };
     juce::TextButton layerLoopButton{ "Loop" };
-    juce::TextButton layerStopButton{ "Detener" };
     juce::Label layerStatus;
-    std::array<SampleDropCard, SampleLayerBank::slotCount> layerCards;
-    std::array<juce::Label, SampleLayerBank::slotCount> layerTitles;
-    std::array<juce::TextButton, SampleLayerBank::slotCount> layerLoadButtons;
-    std::array<PrecisionRotarySlider, SampleLayerBank::slotCount>
+    std::array<SampleDropCard, 4> layerCards;
+    std::array<juce::Label, 4> layerTitles;
+    std::array<juce::TextButton, 4> layerLoadButtons;
+    std::array<PrecisionRotarySlider, 4>
         layerVolumeKnobs;
-    std::array<PrecisionRotarySlider, SampleLayerBank::slotCount>
+    std::array<PrecisionRotarySlider, 4>
         layerPitchKnobs;
-    std::array<juce::Label, SampleLayerBank::slotCount> layerVolumeLabels;
-    std::array<SignalLed, SampleLayerBank::slotCount> layerMuteLeds;
-    std::array<juce::Label, SampleLayerBank::slotCount> layerPitchLabels;
+    std::array<juce::Label, 4> layerVolumeLabels;
+    std::array<SignalLed, 4> layerMuteLeds;
+    std::array<juce::Label, 4> layerPitchLabels;
 
     juce::Label pianoTitle;
     juce::TextButton pianoFoldButton{ "[v] Piano Bajo Sexto Bronco" };
@@ -310,6 +376,8 @@ private:
     juce::Label sectionBroncoLabel;
     juce::TextButton resetEqButton{ "Restablecer EQ" };
     RackPanel rackPanel;
+    ReferencePianoComponent referencePiano;
+    juce::Label referencePianoCaption;
     juce::Component* keyListenerHost = nullptr;
     bool pianoExpanded = false;
     bool inputEqExpanded = true;

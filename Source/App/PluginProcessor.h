@@ -23,7 +23,8 @@ public:
     void setLooping(bool shouldLoop) override { looping = shouldLoop; }
     bool isLooping() const override { return looping; }
     void setPitchRatio(double ratio) { pitchRatio.store(ratio); }
-    void setTrimEnd(float amount01) { trimEnd.store(juce::jlimit(0.05f, 1.0f, amount01)); }
+    void setTrimStart(float amount01) { trimStart.store(juce::jlimit(0.0f, 0.90f, amount01)); }
+    void setTrimEnd(float amount01) { trimEnd.store(juce::jlimit(0.10f, 1.0f, amount01)); }
     void setFadeIn(float amount01) { fadeIn.store(juce::jlimit(0.0f, 1.0f, amount01)); }
     void setFadeOut(float amount01) { fadeOut.store(juce::jlimit(0.0f, 1.0f, amount01)); }
     bool takeReachedEnd() { return reachedEnd.exchange(false); }
@@ -34,6 +35,7 @@ private:
     double position = 0.0;
     double sourceRate = 44100.0;
     std::atomic<double> pitchRatio{ 1.0 };
+    std::atomic<float> trimStart{ 0.0f };
     std::atomic<float> trimEnd{ 1.0f };
     std::atomic<float> fadeIn{ 0.0f };
     std::atomic<float> fadeOut{ 0.0f };
@@ -44,26 +46,37 @@ private:
 class SampleLayerBank
 {
 public:
-    static constexpr int slotCount = 4;
+    static constexpr int slotCount = 16;
 
     void prepare(double sampleRate);
     bool loadSlot(int slot, const juce::File& file,
                   juce::AudioFormatManager& formats);
+    void clearSlot(int slot);
     void start();
     void stop();
+    void armOnly(const juce::Array<int>& slotsToPlay);
     void process(juce::AudioBuffer<float>& output);
     void setVolume(int slot, float volume);
     void setMuted(int slot, bool shouldMute);
+    void setEqTilt(int slot, float amount01);
     void setPitchSemitones(int slot, double semitones);
     void setLooping(bool shouldLoop);
+    void setReversed(bool shouldReverse);
+    void setTrimStart(float amount01);
+    void setTrimEnd(float amount01);
+    void setFadeIn(float amount01);
+    void setFadeOut(float amount01);
     bool isPlaying() const { return playing.load(); }
     bool isLooping() const { return looping.load(); }
+    bool isReversed() const { return reversed.load(); }
     bool isMuted(int slot) const;
+    bool isArmed(int slot) const;
     float getLed(int slot) const;
     bool hasSample(int slot) const;
     juce::String getSlotName(int slot) const;
     juce::String getSlotPath(int slot) const;
     float getVolume(int slot) const;
+    float getEqTilt(int slot) const;
     double getPitchSemitones(int slot) const;
 
 private:
@@ -74,10 +87,14 @@ private:
         juce::String name;
         double sourceRate = 44100.0;
         double position = 0.0;
+        int gapLeft = 0;
+        float lpState[2]{};
         std::atomic<float> volume{ 1.0f };
+        std::atomic<float> eqTilt{ 0.5f };
         std::atomic<double> pitchSemitones{ 0.0 };
         std::atomic<bool> loaded{ false };
         std::atomic<bool> muted{ false };
+        std::atomic<bool> armed{ false };
         std::atomic<float> led{ 0.0f };
     };
 
@@ -85,6 +102,11 @@ private:
     std::array<Slot, slotCount> slots;
     std::atomic<bool> playing{ false };
     std::atomic<bool> looping{ true };
+    std::atomic<bool> reversed{ false };
+    std::atomic<float> trimStart{ 0.0f };
+    std::atomic<float> trimEnd{ 1.0f };
+    std::atomic<float> fadeIn{ 0.0f };
+    std::atomic<float> fadeOut{ 0.0f };
     double hostSampleRate = 44100.0;
 };
 
@@ -92,7 +114,7 @@ class MiguelMusicAssistantAudioProcessor final : public juce::AudioProcessor
 {
 public:
     MiguelMusicAssistantAudioProcessor();
-    ~MiguelMusicAssistantAudioProcessor() override = default;
+    ~MiguelMusicAssistantAudioProcessor() override;
 
     void prepareToPlay(double sampleRate, int samplesPerBlock) override;
     void releaseResources() override;
@@ -129,6 +151,7 @@ public:
     bool loadSample(const juce::File&,
                     AudioSection section = AudioSection::samples);
     bool loadLayerSample(int slot, const juce::File& file);
+    void playSlots(const juce::Array<int>& slots);
     void playSample();
     void stopSamplePlayback();
     void toggleSamplePlayback();
@@ -137,13 +160,19 @@ public:
     bool takeCompletedCapture(juce::File& fileOut);
     void stopPreviews();
     void setSampleLooping(bool shouldLoop);
-    void setSamplePitchSemitones(double semitones);
-    void setSampleTrim(float amount01);
+    void setSampleReversed(bool shouldReverse);
+    void setSamplePitchSemitones(double semitones, int slot = -1);
+    void setSampleTrimStart(float amount01);
+    void setSampleTrimEnd(float amount01);
     void setSampleFadeIn(float amount01);
     void setSampleFadeOut(float amount01);
     bool isSampleLooping() const { return shapedSource.isLooping(); }
-    bool isSamplePlaying() const { return sampleTransport.isPlaying(); }
-    static constexpr int sampleEqBandCount = 3;
+    bool isSampleReversed() const { return layerBank.isReversed(); }
+    bool isSamplePlaying() const { return layerBank.isPlaying(); }
+    static constexpr int sampleEqBandCount = 7;
+    static constexpr std::array<double, sampleEqBandCount> sampleEqFrequencies{
+        60.0, 160.0, 400.0, 1000.0, 2500.0, 6300.0, 12000.0
+    };
     void setSampleEqGain(int band, float decibels);
     float getSampleEqGain(int band) const;
     void startMidiPreview(const juce::MidiFile&, double bpm);
@@ -157,6 +186,7 @@ public:
     BroncoPianoEngine& getPianoEngine() { return pianoEngine; }
     SectionEqBank& getSectionEqBank() { return sectionEqBank; }
     FxRack& getFxRack() { return fxRack; }
+    juce::MidiKeyboardState& getRefPianoState() { return refPianoState; }
 
     void setUiSessionState(const juce::ValueTree& state);
     juce::ValueTree getUiSessionState() const;
@@ -197,11 +227,12 @@ private:
     std::atomic<int> captureState{ 0 };
     std::atomic<int> captureWritten{ 0 };
     std::atomic<bool> captureStopRequest{ false };
-    std::atomic<bool> captureHeardSample{ false };
-    double lastCapturePressMs = 0.0;
+    std::atomic<int> captureSilentSamples{ 0 };
     std::atomic<AudioSection> previewSection{ AudioSection::samples };
 
     juce::Synthesiser previewSynth;
+    juce::Synthesiser refPianoSynth;
+    juce::MidiKeyboardState refPianoState;
     juce::MidiMessageSequence previewSequence;
     juce::CriticalSection previewLock;
     std::atomic<bool> midiPreviewPlaying{ false };

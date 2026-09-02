@@ -1,0 +1,24 @@
+---
+description: Un repo, carpetas App/Modules, compilar solo el target, JUCE una vez
+alwaysApply: true
+---
+
+# Tres directrices
+
+## 1. Un repo, carpetas
+- App / DAW: `Source/App/`
+- Plugins VST3: `Source/Modules/`
+- Compartido: `Source/Shared/`
+- Un CMake; JUCE FetchContent una vez (8.0.14).
+
+## 2. Compilar solo lo que cambias
+`--target` o `.\compilar.ps1 <alias>`. No construir los 13 por defecto.
+
+- App: `.\compilar.ps1 app`
+- Un FX: `delay`, `eq`, `afinador`, `distorsion`, …
+- Los 12 FX: `.\compilar.ps1 fx` solo si el cambio es de todos
+
+`Source/Shared/` → app + los plugins que deban actualizarse, no los 13 por costumbre. Cerrar el exe/VST3 en uso antes del link.
+
+## 3. No clonar JUCE N veces
+Un solo JUCE en `build/_deps`. No FetchContent extra, no clone por plugin, no copiar JUCE a Modules.

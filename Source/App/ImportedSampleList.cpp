@@ -1,11 +1,101 @@
 #include "ImportedSampleList.h"
 #include "MiguelLookAndFeel.h"
+#include "PrecisionRotarySlider.h"
+
+namespace
+{
+class SampleSlotRow final : public juce::Component
+{
+public:
+    std::function<void()> onMute;
+    std::function<void(float)> onVolume;
+    std::function<void(float)> onEq;
+
+    SampleSlotRow()
+    {
+        setInterceptsMouseClicks(false, true);
+        addAndMakeVisible(statusLed);
+        addAndMakeVisible(name);
+        addAndMakeVisible(volume);
+        addAndMakeVisible(eq);
+        name.setInterceptsMouseClicks(false, false);
+        volume.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+        volume.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        volume.setRange(0.0, 1.5, 0.01);
+        volume.setValue(1.0, juce::dontSendNotification);
+        volume.setWantsKeyboardFocus(false);
+        volume.setMouseDragSensitivity(500);
+        volume.setWheelStepMultiplier(5.0);
+        eq.setSliderStyle(juce::Slider::RotaryHorizontalVerticalDrag);
+        eq.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        eq.setRange(0.0, 1.0, 0.01);
+        eq.setValue(0.5, juce::dontSendNotification);
+        eq.setWantsKeyboardFocus(false);
+        eq.setMouseDragSensitivity(500);
+        eq.setWheelStepMultiplier(5.0);
+        statusLed.onClick = [this]
+        {
+            if (onMute)
+                onMute();
+        };
+        volume.onValueChange = [this]
+        {
+            if (onVolume)
+                onVolume(static_cast<float>(volume.getValue()));
+        };
+        eq.onValueChange = [this]
+        {
+            if (onEq)
+                onEq(static_cast<float>(eq.getValue()));
+        };
+    }
+
+    void setContent(const juce::String& text, bool muted, float vol,
+                    float eqAmt, bool selected)
+    {
+        chosen = selected;
+        name.setText(text, juce::dontSendNotification);
+        name.setColour(juce::Label::textColourId,
+                       text.contains("—") ? MiguelColours::textMuted()
+                                          : MiguelColours::text());
+        statusLed.setLevel((selected && !muted) ? 1.0f : 0.0f, false);
+        volume.setValue(vol, juce::dontSendNotification);
+        eq.setValue(eqAmt, juce::dontSendNotification);
+        repaint();
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        auto bounds = getLocalBounds().toFloat();
+        g.setColour(chosen ? MiguelColours::green().withAlpha(0.28f)
+                           : MiguelColours::panel());
+        g.fillRect(bounds);
+    }
+
+    void resized() override
+    {
+        auto bounds = getLocalBounds().reduced(4, 2);
+        statusLed.setBounds(bounds.removeFromLeft(22).reduced(1));
+        eq.setBounds(bounds.removeFromRight(34).reduced(1));
+        volume.setBounds(bounds.removeFromRight(34).reduced(1));
+        name.setBounds(bounds.reduced(4, 0));
+    }
+
+private:
+    bool chosen = false;
+    SignalLed statusLed;
+    juce::Label name;
+    FineWheelSlider volume;
+    FineWheelSlider eq;
+};
+}
 
 ImportedSampleList::ImportedSampleList()
 {
     addAndMakeVisible(list);
-    list.setRowHeight(34);
-    list.setMultipleSelectionEnabled(false);
+    list.setRowHeight(40);
+    list.setMultipleSelectionEnabled(true);
+    list.setClickingTogglesRowSelection(true);
     list.setColour(juce::ListBox::backgroundColourId,
                    MiguelColours::panel());
     list.setOutlineThickness(0);
@@ -21,16 +111,47 @@ bool ImportedSampleList::isSupportedAudioFile(const juce::File& file)
         && extensions.contains(file.getFileExtension().toLowerCase());
 }
 
+int ImportedSampleList::firstEmptySlot() const
+{
+    for (int i = 0; i < maxSamples; ++i)
+        if (!slots[static_cast<size_t>(i)].file.existsAsFile())
+            return i;
+    return -1;
+}
+
+int ImportedSampleList::getNumSamples() const noexcept
+{
+    auto count = 0;
+    for (const auto& slot : slots)
+        if (slot.file.existsAsFile())
+            ++count;
+    return count;
+}
+
 void ImportedSampleList::addFiles(const juce::Array<juce::File>& files)
 {
     auto firstAdded = -1;
     for (const auto& file : files)
     {
-        if (!isSupportedAudioFile(file) || samples.contains(file))
+        if (!isSupportedAudioFile(file))
             continue;
+        auto already = false;
+        for (const auto& slot : slots)
+            if (slot.file == file)
+                already = true;
+        if (already)
+            continue;
+        auto index = firstEmptySlot();
+        if (index < 0)
+            index = maxSamples - 1;
+        slots[static_cast<size_t>(index)].file = file;
+        slots[static_cast<size_t>(index)].muted = false;
+        slots[static_cast<size_t>(index)].volume = 1.0f;
+        slots[static_cast<size_t>(index)].eq = 0.5f;
         if (firstAdded < 0)
-            firstAdded = samples.size();
-        samples.add(file);
+            firstAdded = index;
+        if (onSlotLoaded)
+            onSlotLoaded(index, file);
     }
 
     list.updateContent();
@@ -40,7 +161,7 @@ void ImportedSampleList::addFiles(const juce::Array<juce::File>& files)
         list.scrollToEnsureRowIsOnscreen(firstAdded);
     }
     if (onSampleCountChanged)
-        onSampleCountChanged(samples.size());
+        onSampleCountChanged(getNumSamples());
     repaint();
 }
 
@@ -54,15 +175,17 @@ void ImportedSampleList::addFiles(const juce::StringArray& paths)
 
 void ImportedSampleList::setFilesFromPaths(const juce::StringArray& paths)
 {
-    samples.clear();
+    for (auto& slot : slots)
+        slot = {};
     addFiles(paths);
 }
 
 juce::StringArray ImportedSampleList::getFilePaths() const
 {
     juce::StringArray paths;
-    for (const auto& file : samples)
-        paths.add(file.getFullPathName());
+    for (const auto& slot : slots)
+        if (slot.file.existsAsFile())
+            paths.add(slot.file.getFullPathName());
     return paths;
 }
 
@@ -70,30 +193,177 @@ void ImportedSampleList::addOrReplaceLast(const juce::File& file)
 {
     if (!isSupportedAudioFile(file))
         return;
-    if (samples.size() >= maxSamples)
-        samples.set(samples.size() - 1, file);
-    else
-        samples.add(file);
+    auto index = firstEmptySlot();
+    if (index < 0)
+        index = maxSamples - 1;
+    slots[static_cast<size_t>(index)].file = file;
+    slots[static_cast<size_t>(index)].muted = false;
+    slots[static_cast<size_t>(index)].volume = 1.0f;
+    slots[static_cast<size_t>(index)].eq = 0.5f;
     list.updateContent();
-    list.selectRow(samples.size() - 1);
-    list.scrollToEnsureRowIsOnscreen(samples.size() - 1);
+    list.selectRow(index);
+    list.scrollToEnsureRowIsOnscreen(index);
+    if (onSlotLoaded)
+        onSlotLoaded(index, file);
     if (onSampleCountChanged)
-        onSampleCountChanged(samples.size());
+        onSampleCountChanged(getNumSamples());
     if (onSelectionChanged)
-        onSelectionChanged(samples.getReference(samples.size() - 1));
+        onSelectionChanged(file);
     repaint();
 }
 
 void ImportedSampleList::removeSelected()
 {
-    removeRow(list.getSelectedRow());
+    const auto selected = list.getSelectedRows();
+    juce::Array<int> rows;
+    for (int i = 0; i < selected.size(); ++i)
+        rows.add(selected[i]);
+
+    if (rows.isEmpty())
+        rows.add(list.getSelectedRow());
+
+    rows.sort();
+    for (int i = rows.size(); --i >= 0;)
+    {
+        const auto row = rows[i];
+        if (!juce::isPositiveAndBelow(row, maxSamples))
+            continue;
+        slots[static_cast<size_t>(row)] = {};
+        if (onSlotLoaded)
+            onSlotLoaded(row, {});
+    }
+
+    list.deselectAllRows();
+    list.updateContent();
+    if (onSelectionChanged)
+        onSelectionChanged(getSelectedFile());
+    if (onSampleCountChanged)
+        onSampleCountChanged(getNumSamples());
+    repaint();
 }
 
 juce::File ImportedSampleList::getSelectedFile() const
 {
     const auto row = list.getSelectedRow();
-    return juce::isPositiveAndBelow(row, samples.size())
-        ? samples.getReference(row) : juce::File{};
+    return juce::isPositiveAndBelow(row, maxSamples)
+        ? slots[static_cast<size_t>(row)].file : juce::File{};
+}
+
+juce::Array<juce::File> ImportedSampleList::getSelectedFiles() const
+{
+    juce::Array<juce::File> files;
+    const auto selected = list.getSelectedRows();
+    for (int i = 0; i < selected.size(); ++i)
+    {
+        const auto row = selected[i];
+        if (juce::isPositiveAndBelow(row, maxSamples)
+            && slots[static_cast<size_t>(row)].file.existsAsFile())
+            files.add(slots[static_cast<size_t>(row)].file);
+    }
+    return files;
+}
+
+int ImportedSampleList::getSelectedSlot() const
+{
+    return list.getSelectedRow();
+}
+
+juce::Array<int> ImportedSampleList::getSelectedSlots() const
+{
+    juce::Array<int> rows;
+    const auto selected = list.getSelectedRows();
+    for (int i = 0; i < selected.size(); ++i)
+    {
+        const auto row = selected[i];
+        if (juce::isPositiveAndBelow(row, maxSamples)
+            && slots[static_cast<size_t>(row)].file.existsAsFile())
+            rows.add(row);
+    }
+    if (rows.isEmpty())
+    {
+        const auto row = list.getSelectedRow();
+        if (juce::isPositiveAndBelow(row, maxSamples)
+            && slots[static_cast<size_t>(row)].file.existsAsFile())
+            rows.add(row);
+    }
+    return rows;
+}
+
+juce::File ImportedSampleList::getSlotFile(int slot) const
+{
+    return juce::isPositiveAndBelow(slot, maxSamples)
+        ? slots[static_cast<size_t>(slot)].file : juce::File{};
+}
+
+void ImportedSampleList::setSlotFile(int slot, const juce::File& file)
+{
+    if (!juce::isPositiveAndBelow(slot, maxSamples))
+        return;
+    if (file.existsAsFile() && isSupportedAudioFile(file))
+        slots[static_cast<size_t>(slot)].file = file;
+    else
+        slots[static_cast<size_t>(slot)] = {};
+    list.updateContent();
+    if (onSlotLoaded)
+        onSlotLoaded(slot, slots[static_cast<size_t>(slot)].file);
+    if (onSampleCountChanged)
+        onSampleCountChanged(getNumSamples());
+}
+
+void ImportedSampleList::setSlotMute(int slot, bool muted)
+{
+    if (!juce::isPositiveAndBelow(slot, maxSamples))
+        return;
+    slots[static_cast<size_t>(slot)].muted = muted;
+    list.updateContent();
+}
+
+void ImportedSampleList::setSlotVolume(int slot, float volume)
+{
+    if (!juce::isPositiveAndBelow(slot, maxSamples))
+        return;
+    slots[static_cast<size_t>(slot)].volume = volume;
+}
+
+void ImportedSampleList::setSlotEq(int slot, float amount01)
+{
+    if (!juce::isPositiveAndBelow(slot, maxSamples))
+        return;
+    slots[static_cast<size_t>(slot)].eq = amount01;
+}
+
+bool ImportedSampleList::isSlotMuted(int slot) const
+{
+    return juce::isPositiveAndBelow(slot, maxSamples)
+        && slots[static_cast<size_t>(slot)].muted;
+}
+
+float ImportedSampleList::getSlotVolume(int slot) const
+{
+    return juce::isPositiveAndBelow(slot, maxSamples)
+        ? slots[static_cast<size_t>(slot)].volume : 1.0f;
+}
+
+float ImportedSampleList::getSlotEq(int slot) const
+{
+    return juce::isPositiveAndBelow(slot, maxSamples)
+        ? slots[static_cast<size_t>(slot)].eq : 0.5f;
+}
+
+void ImportedSampleList::setSlotLed(int slot)
+{
+    if (!juce::isPositiveAndBelow(slot, maxSamples))
+        return;
+    if (auto* row = dynamic_cast<SampleSlotRow*>(
+            list.getComponentForRowNumber(slot)))
+    {
+        const auto& data = slots[static_cast<size_t>(slot)];
+        const auto title = data.file.existsAsFile()
+            ? juce::String(slot + 1) + ". " + data.file.getFileName()
+            : juce::String(slot + 1) + ". —";
+        row->setContent(title, data.muted, data.volume, data.eq,
+                        list.isRowSelected(slot));
+    }
 }
 
 void ImportedSampleList::resized()
@@ -119,15 +389,6 @@ void ImportedSampleList::paintOverChildren(juce::Graphics& graphics)
     graphics.setColour(dragOver ? MiguelColours::orange()
                                 : MiguelColours::border());
     graphics.drawRoundedRectangle(bounds, 7.0f, dragOver ? 2.0f : 1.0f);
-
-    if (samples.isEmpty())
-    {
-        graphics.setColour(MiguelColours::textMuted());
-        graphics.setFont(juce::FontOptions(14.0f));
-        graphics.drawFittedText(
-            "Arrastra archivos de audio aquí o usa \"Agregar samples...\"",
-            getLocalBounds().reduced(24), juce::Justification::centred, 2);
-    }
 }
 
 bool ImportedSampleList::isInterestedInFileDrag(
@@ -161,90 +422,80 @@ void ImportedSampleList::fileDragExit(const juce::StringArray&)
 
 int ImportedSampleList::getNumRows()
 {
-    return samples.size();
+    return maxSamples;
 }
 
 void ImportedSampleList::paintListBoxItem(
-    int row, juce::Graphics& graphics, int width, int height, bool selected)
+    int, juce::Graphics&, int, int, bool)
 {
-    if (!juce::isPositiveAndBelow(row, samples.size()))
-        return;
+}
 
-    if (selected)
+juce::Component* ImportedSampleList::refreshComponentForRow(
+    int row, bool selected, juce::Component* existing)
+{
+    auto* rowComp = existing != nullptr
+        ? dynamic_cast<SampleSlotRow*>(existing)
+        : new SampleSlotRow();
+    if (rowComp == nullptr)
+        rowComp = new SampleSlotRow();
+    if (!juce::isPositiveAndBelow(row, maxSamples))
+        return rowComp;
+
+    const auto& slot = slots[static_cast<size_t>(row)];
+    const auto title = slot.file.existsAsFile()
+        ? juce::String(row + 1) + ". " + slot.file.getFileName()
+        : juce::String(row + 1) + ". —";
+    rowComp->setContent(title, slot.muted, slot.volume, slot.eq, selected);
+    rowComp->onMute = [this, row]
     {
-        graphics.setColour(MiguelColours::orange().withAlpha(0.22f));
-        graphics.fillRoundedRectangle(
-            juce::Rectangle<float>(2.0f, 2.0f,
-                static_cast<float>(width - 4),
-                static_cast<float>(height - 4)), 4.0f);
-    }
-    else if (row % 2 != 0)
+        slots[static_cast<size_t>(row)].muted =
+            !slots[static_cast<size_t>(row)].muted;
+        if (onMuteChanged)
+            onMuteChanged(row, slots[static_cast<size_t>(row)].muted);
+        list.updateContent();
+    };
+    rowComp->onVolume = [this, row](float value)
     {
-        graphics.fillAll(MiguelColours::panelRaised().withAlpha(0.45f));
-    }
-
-    const auto& file = samples.getReference(row);
-    graphics.setColour(selected ? MiguelColours::text()
-                                : MiguelColours::textMuted());
-    graphics.setFont(juce::FontOptions(13.0f));
-    graphics.drawText(file.getFileName(), 12, 0, width - 140, height,
-                      juce::Justification::centredLeft, true);
-
-    const auto sizeMb = static_cast<double>(file.getSize())
-        / (1024.0 * 1024.0);
-    graphics.setColour(MiguelColours::textMuted().withAlpha(0.75f));
-    graphics.setFont(juce::FontOptions(11.0f));
-    graphics.drawText(juce::String(sizeMb, 1) + " MB",
-                      width - 128, 0, 76, height,
-                      juce::Justification::centredRight);
-
-    const auto removeArea = juce::Rectangle<float>(
-        static_cast<float>(width - 42), 7.0f, 24.0f,
-        static_cast<float>(height - 14));
-    graphics.setColour(MiguelColours::danger().withAlpha(
-        selected ? 0.9f : 0.55f));
-    graphics.drawLine(removeArea.getX() + 6.0f,
-                      removeArea.getY() + 3.0f,
-                      removeArea.getRight() - 6.0f,
-                      removeArea.getBottom() - 3.0f, 1.8f);
-    graphics.drawLine(removeArea.getRight() - 6.0f,
-                      removeArea.getY() + 3.0f,
-                      removeArea.getX() + 6.0f,
-                      removeArea.getBottom() - 3.0f, 1.8f);
+        slots[static_cast<size_t>(row)].volume = value;
+        if (onVolumeChanged)
+            onVolumeChanged(row, value);
+    };
+    rowComp->onEq = [this, row](float value)
+    {
+        slots[static_cast<size_t>(row)].eq = value;
+        if (onEqChanged)
+            onEqChanged(row, value);
+    };
+    rowComp->setOpaque(true);
+    return rowComp;
 }
 
 void ImportedSampleList::selectedRowsChanged(int row)
 {
-    if (onSelectionChanged && juce::isPositiveAndBelow(row, samples.size()))
-        onSelectionChanged(samples.getReference(row));
-}
-
-void ImportedSampleList::listBoxItemClicked(
-    int row, const juce::MouseEvent& event)
-{
-    if (event.position.x >= static_cast<float>(list.getWidth() - 48))
-        removeRow(row);
+    if (onSelectionChanged && juce::isPositiveAndBelow(row, maxSamples))
+        onSelectionChanged(slots[static_cast<size_t>(row)].file);
 }
 
 void ImportedSampleList::listBoxItemDoubleClicked(
     int row, const juce::MouseEvent&)
 {
-    if (onFileDoubleClicked && juce::isPositiveAndBelow(row, samples.size()))
-        onFileDoubleClicked(samples.getReference(row));
+    if (onFileDoubleClicked && juce::isPositiveAndBelow(row, maxSamples)
+        && slots[static_cast<size_t>(row)].file.existsAsFile())
+        onFileDoubleClicked(slots[static_cast<size_t>(row)].file);
 }
 
 void ImportedSampleList::removeRow(int row)
 {
-    if (!juce::isPositiveAndBelow(row, samples.size()))
+    if (!juce::isPositiveAndBelow(row, maxSamples))
         return;
 
-    samples.remove(row);
+    slots[static_cast<size_t>(row)] = {};
     list.updateContent();
-    if (!samples.isEmpty())
-        list.selectRow(juce::jmin(row, samples.size() - 1));
-    else if (onSelectionChanged)
-        onSelectionChanged({});
+    if (onSlotLoaded)
+        onSlotLoaded(row, {});
+    if (onSelectionChanged)
+        onSelectionChanged(getSelectedFile());
     if (onSampleCountChanged)
-        onSampleCountChanged(samples.size());
+        onSampleCountChanged(getNumSamples());
     repaint();
 }

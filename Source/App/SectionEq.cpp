@@ -61,7 +61,7 @@ void SectionEq::process(juce::AudioBuffer<float>& buffer)
     const auto broncoMix = broncoMax.load();
     if (broncoMix > 0.0f)
     {
-        const auto baseDelay = static_cast<int>(activeSampleRate * 0.0014);
+        const auto baseDelay = static_cast<int>(activeSampleRate * 0.012);
         for (int sample = 0; sample < samples; ++sample)
         {
             const auto modulation = std::sin(broncoPhase) * 2.0;
@@ -79,8 +79,8 @@ void SectionEq::process(juce::AudioBuffer<float>& buffer)
                 envelope = juce::jmax(
                     std::abs(dry), envelope * 0.995f);
                 const auto transient = std::abs(dry)
-                    > previousEnvelope * 1.5f
-                    ? 1.45f : 1.0f;
+                    > previousEnvelope * 1.25f
+                    ? 2.1f : 1.15f;
 
                 auto& delay = broncoDelay[static_cast<size_t>(channel)];
                 delay[static_cast<size_t>(broncoWritePosition)] = dry;
@@ -92,7 +92,7 @@ void SectionEq::process(juce::AudioBuffer<float>& buffer)
                 const auto doubled =
                     delay[static_cast<size_t>(readPosition)];
                 const auto wet = std::tanh(
-                    (dry * transient + doubled * 0.72f) * 1.12f);
+                    (dry * transient + doubled * 1.15f) * (1.35f + broncoMix));
                 data[sample] = dry * (1.0f - broncoMix)
                     + wet * broncoMix;
             }

@@ -12,6 +12,126 @@ bool isAudioSampleFile(const juce::File& file)
     return ext == ".wav" || ext == ".aif" || ext == ".aiff"
         || ext == ".flac" || ext == ".mp3" || ext == ".ogg";
 }
+
+juce::Font pichaTitleFont(float height)
+{
+    const auto available = juce::Font::findAllTypefaceNames();
+    const juce::StringArray preferred{
+        "Sitka Banner", "Palatino Linotype", "Georgia", "Constantia"
+    };
+    for (const auto& face : preferred)
+        if (available.contains(face))
+            return juce::Font(juce::FontOptions(
+                face, height, juce::Font::italic | juce::Font::bold));
+    return juce::Font(juce::FontOptions(
+        height, juce::Font::italic | juce::Font::bold));
+}
+
+void drawAccordionSilhouette(juce::Graphics& g, juce::Rectangle<float> area,
+                             juce::Colour fill)
+{
+    auto r = area.reduced(1.5f);
+    const auto x = r.getX();
+    const auto y = r.getY();
+    const auto w = r.getWidth();
+    const auto h = r.getHeight();
+    juce::Path body;
+    body.addRoundedRectangle(x, y + h * 0.18f, w * 0.24f, h * 0.64f, 2.4f);
+    const auto foldsX = x + w * 0.24f;
+    const auto foldsW = w * 0.32f;
+    const auto foldsY = y + h * 0.24f;
+    const auto foldsH = h * 0.52f;
+    for (int i = 0; i < 7; ++i)
+    {
+        const auto t = static_cast<float>(i) / 7.0f;
+        const auto inset = (i % 2 == 0) ? 0.0f : foldsH * 0.09f;
+        body.addRoundedRectangle(
+            foldsX + foldsW * t, foldsY + inset,
+            juce::jmax(2.0f, foldsW / 9.5f), foldsH - inset * 2.0f, 0.8f);
+    }
+    const auto kx = x + w * 0.56f;
+    body.addRoundedRectangle(kx, y + h * 0.10f, w * 0.42f, h * 0.80f, 2.6f);
+    g.setColour(fill);
+    g.fillPath(body);
+    g.setColour(MiguelColours::background().withAlpha(0.55f));
+    const auto keyY = y + h * 0.16f;
+    const auto keyH = h * 0.20f;
+    const auto keyW = w * 0.34f;
+    for (int i = 0; i < 8; ++i)
+    {
+        const auto kw = keyW / 8.0f;
+        g.fillRect(kx + w * 0.04f + static_cast<float>(i) * kw,
+                   keyY, kw * 0.68f, keyH);
+    }
+}
+
+void drawBajoSextoSilhouette(juce::Graphics& g, juce::Rectangle<float> area,
+                             juce::Colour fill)
+{
+    auto r = area.reduced(1.2f);
+    const auto x = r.getX();
+    const auto y = r.getY();
+    const auto w = r.getWidth();
+    const auto h = r.getHeight();
+    juce::Path body;
+    body.addEllipse(x, y + h * 0.34f, w * 0.54f, h * 0.62f);
+    body.addEllipse(x + w * 0.06f, y + h * 0.08f, w * 0.42f, h * 0.48f);
+    juce::Path neck;
+    neck.addRoundedRectangle(x + w * 0.46f, y + h * 0.42f,
+                             w * 0.28f, h * 0.14f, 1.2f);
+    juce::Path head;
+    const auto hx = x + w * 0.72f;
+    const auto hy = y + h * 0.28f;
+    head.startNewSubPath(hx, hy + h * 0.08f);
+    head.lineTo(hx + w * 0.24f, hy);
+    head.lineTo(hx + w * 0.24f, hy + h * 0.42f);
+    head.lineTo(hx, hy + h * 0.32f);
+    head.closeSubPath();
+    g.setColour(fill);
+    g.fillPath(body);
+    g.fillPath(neck);
+    g.fillPath(head);
+    g.setColour(MiguelColours::background());
+    g.fillEllipse(x + w * 0.16f, y + h * 0.38f, w * 0.20f, h * 0.22f);
+}
+}
+
+void PichaBrandBar::paint(juce::Graphics& graphics)
+{
+    auto bounds = getLocalBounds().toFloat();
+    juce::ColourGradient wash(
+        MiguelColours::panelHighlight().withAlpha(0.55f),
+        bounds.getX(), bounds.getY(),
+        MiguelColours::background(),
+        bounds.getX(), bounds.getBottom(), false);
+    graphics.setGradientFill(wash);
+    graphics.fillAll();
+    graphics.setColour(MiguelColours::purple().withAlpha(0.55f));
+    graphics.fillRect(0.0f, bounds.getBottom() - 1.5f, bounds.getWidth(), 1.5f);
+    graphics.setColour(MiguelColours::blue().withAlpha(0.45f));
+    graphics.fillRect(0.0f, 0.0f, bounds.getWidth(), 1.0f);
+
+    auto row = getLocalBounds().toFloat().reduced(10.0f, 6.0f);
+    auto accordionArea = row.removeFromLeft(78.0f);
+    row.removeFromLeft(6.0f);
+    auto bajoArea = row.removeFromLeft(92.0f);
+    row.removeFromLeft(12.0f);
+    drawAccordionSilhouette(graphics, accordionArea, MiguelColours::lilac());
+    drawBajoSextoSilhouette(graphics, bajoArea, MiguelColours::purple());
+
+    auto titleArea = row;
+    graphics.setFont(pichaTitleFont(38.0f));
+    graphics.setColour(MiguelColours::yellow().withAlpha(0.28f));
+    graphics.drawText("PICHADAW", titleArea.translated(1.0f, 1.0f),
+                      juce::Justification::centredLeft, false);
+    graphics.setColour(MiguelColours::lilac());
+    graphics.drawText("PICHADAW", titleArea,
+                      juce::Justification::centredLeft, false);
+    graphics.setFont(juce::FontOptions(12.0f, juce::Font::italic));
+    graphics.setColour(MiguelColours::blue());
+    graphics.drawText("beta", titleArea.translated(214.0f, 8.0f)
+                           .withWidth(48.0f).withHeight(22.0f),
+                      juce::Justification::centredLeft, false);
 }
 
 void SampleDropCard::paint(juce::Graphics& graphics)
@@ -52,11 +172,6 @@ void CapturePad::setMode(int newMode)
     if (mode == newMode)
         return;
     mode = newMode;
-    if (mode == 1)
-        startTimerHz(6);
-    else
-        stopTimer();
-    flash = false;
     repaint();
 }
 
@@ -64,9 +179,7 @@ void CapturePad::paintButton(juce::Graphics& graphics, bool, bool)
 {
     auto bounds = getLocalBounds().toFloat().reduced(2.0f);
     juce::Colour fill = juce::Colours::white;
-    if (mode == 1)
-        fill = flash ? MiguelColours::yellow() : juce::Colours::white;
-    else if (mode == 2)
+    if (mode == 2)
         fill = MiguelColours::danger();
     graphics.setColour(juce::Colours::black.withAlpha(0.35f));
     graphics.fillEllipse(bounds.translated(0.0f, 2.0f));
@@ -84,12 +197,6 @@ void CapturePad::clicked()
 {
     if (onToggle)
         onToggle();
-}
-
-void CapturePad::timerCallback()
-{
-    flash = !flash;
-    repaint();
 }
 
 SampleWaveform::SampleWaveform()
@@ -120,12 +227,12 @@ void SampleWaveform::paint(juce::Graphics& graphics)
         MiguelColours::panel(), bounds.getCentreX(), bounds.getBottom(), false);
     graphics.setGradientFill(background);
     graphics.fillRoundedRectangle(bounds, 7.0f);
-    graphics.setColour(MiguelColours::cyan().withAlpha(0.8f));
+    graphics.setColour(MiguelColours::blue().withAlpha(0.8f));
     graphics.drawRoundedRectangle(bounds, 7.0f, 1.0f);
 
     if (thumbnail.getTotalLength() > 0.0)
     {
-        graphics.setColour(MiguelColours::cyan());
+        graphics.setColour(MiguelColours::lilac());
         thumbnail.drawChannels(graphics, getLocalBounds().reduced(8),
                                0.0, thumbnail.getTotalLength(), 1.0f);
     }
@@ -166,7 +273,7 @@ void TunerNeedle::paint(juce::Graphics& graphics)
         MiguelColours::panel(), bounds.getCentreX(), bounds.getBottom(), false);
     graphics.setGradientFill(background);
     graphics.fillRoundedRectangle(bounds, 7.0f);
-    graphics.setColour(MiguelColours::cyan().withAlpha(0.8f));
+    graphics.setColour(MiguelColours::blue().withAlpha(0.8f));
     graphics.drawRoundedRectangle(bounds, 7.0f, 1.0f);
 
     const auto centre = juce::Point<float>(
@@ -392,24 +499,22 @@ MiguelMusicAssistantAudioProcessorEditor(
     MiguelMusicAssistantAudioProcessor& processorToUse)
     : AudioProcessorEditor(&processorToUse),
       processor(processorToUse),
-      rackPanel(processorToUse.getFxRack())
+      rackPanel(processorToUse.getFxRack()),
+      referencePiano(processorToUse.getRefPianoState())
 {
     setLookAndFeel(&miguelLookAndFeel);
     setSize(1512, 810);
     setResizable(true, true);
     setResizeLimits(864, 648, 2074, 1260);
+    setName("PICHADAW");
 
-    addAndMakeVisible(tabs);
+    addAndMakeVisible(menuBar);
+    addAndMakeVisible(brandBar);
+    addAndMakeVisible(libraryPage);
     addAndMakeVisible(capturePad);
     capturePad.setAlwaysOnTop(true);
     capturePad.onToggle = [this] { toggleCapturePad(); };
     setWantsKeyboardFocus(true);
-    tabs.setTabBarDepth(38);
-    tabs.setColour(juce::TabbedComponent::backgroundColourId,
-                   MiguelColours::background());
-    tabs.addTab("Samples", MiguelColours::orange(), &libraryPage, false);
-    tabs.addTab("Acordes Bajoquinto", MiguelColours::purple(),
-                &bajoquintoPage, false);
     processor.getGrooveEngine().stop();
 #if JucePlugin_Build_Standalone
     if (auto* holder = juce::StandalonePluginHolder::getInstance())
@@ -495,7 +600,7 @@ MiguelMusicAssistantAudioProcessorEditor(
     libraryPage.addAndMakeVisible(folderLabel);
     libraryPage.addAndMakeVisible(samplePlayButton);
     libraryPage.addAndMakeVisible(sampleLoopButton);
-    libraryPage.addAndMakeVisible(sampleStopButton);
+    libraryPage.addAndMakeVisible(sampleReverseButton);
     libraryPage.addAndMakeVisible(sampleDragButton);
     libraryPage.addAndMakeVisible(sampleInfo);
     libraryPage.addAndMakeVisible(tunerCell);
@@ -506,40 +611,58 @@ MiguelMusicAssistantAudioProcessorEditor(
     tunerCell.addAndMakeVisible(broncoMaxLabel);
     tunerCell.addAndMakeVisible(tunerReadout);
     libraryPage.addAndMakeVisible(eqCell);
-    eqCell.addAndMakeVisible(sampleEqLowLabel);
-    eqCell.addAndMakeVisible(sampleEqMidLabel);
-    eqCell.addAndMakeVisible(sampleEqHighLabel);
     eqCell.addAndMakeVisible(sampleEqResetButton);
-    for (auto& knob : sampleEqKnobs)
-        eqCell.addAndMakeVisible(knob);
+    for (int band = 0; band < MiguelMusicAssistantAudioProcessor::sampleEqBandCount; ++band)
+    {
+        eqCell.addAndMakeVisible(sampleEqBandLabels[static_cast<size_t>(band)]);
+        eqCell.addAndMakeVisible(sampleEqSliders[static_cast<size_t>(band)]);
+    }
     libraryPage.addAndMakeVisible(trimCell);
-    trimCell.addAndMakeVisible(sampleTrimKnob);
+    trimCell.addAndMakeVisible(sampleTrimStartKnob);
+    trimCell.addAndMakeVisible(sampleTrimStartLabel);
+    trimCell.addAndMakeVisible(sampleTrimEndKnob);
+    trimCell.addAndMakeVisible(sampleTrimEndLabel);
     libraryPage.addAndMakeVisible(fadeInCell);
     fadeInCell.addAndMakeVisible(sampleFadeInKnob);
     libraryPage.addAndMakeVisible(fadeOutCell);
     fadeOutCell.addAndMakeVisible(sampleFadeOutKnob);
     libraryPage.addAndMakeVisible(rackPanel);
     libraryPage.addAndMakeVisible(importedSampleList);
+    libraryPage.addAndMakeVisible(referencePiano);
+    libraryPage.addAndMakeVisible(referencePianoCaption);
     configureLabel(libraryTitle, "Biblioteca de Samples");
     libraryTitle.setFont(juce::FontOptions(24.0f, juce::Font::bold));
     configureLabel(folderLabel, "0 samples importados");
     configureLabel(sampleInfo, "Selecciona un archivo; doble clic para escucharlo.");
+    configureLabel(referencePianoCaption,
+                   "Seno siempre on · C4=261,6 Hz MIDI 60 · A4=440 · FL suele llamar C5 a esta misma nota");
+    referencePianoCaption.setFont(juce::FontOptions(12.0f));
+    referencePianoCaption.setJustificationType(juce::Justification::centredLeft);
     configureLabel(tunerTitle, "Afinador de samples");
     tunerTitle.setFont(juce::FontOptions(17.0f, juce::Font::bold));
     configureLabel(tunerReadout, "Tono: esperando sample");
     configureLabel(pitchShiftLabel, "Cambio de tono");
     pitchShiftLabel.setJustificationType(juce::Justification::centred);
-    pitchShiftKnob.setRange(-12.0, 12.0, 0.01);
+    pitchShiftKnob.setRange(-12.0, 12.0, 0.005);
+    pitchShiftKnob.setNumDecimalPlacesToDisplay(3);
     pitchShiftKnob.setValue(0.0);
     pitchShiftKnob.setTextValueSuffix(" st");
     pitchShiftKnob.setDoubleClickReturnValue(true, 0.0);
+    pitchShiftKnob.setWheelStepMultiplier(1.0);
+    pitchShiftKnob.setMouseDragSensitivity(2500);
     pitchShiftKnob.setTextBoxStyle(
         juce::Slider::TextBoxBelow, false, 82, 22);
     pitchShiftKnob.setColour(juce::Slider::rotarySliderFillColourId,
-                             MiguelColours::orange());
+                             MiguelColours::purple());
     pitchShiftKnob.onValueChange = [this]
     {
-        processor.setSamplePitchSemitones(pitchShiftKnob.getValue());
+        const auto centsAsSemitones = pitchShiftKnob.getValue();
+        const auto slots = importedSampleList.getSelectedSlots();
+        if (slots.isEmpty())
+            processor.setSamplePitchSemitones(centsAsSemitones, -1);
+        else
+            for (int i = 0; i < slots.size(); ++i)
+                processor.setSamplePitchSemitones(centsAsSemitones, slots[i]);
         updateTunerDisplay();
     };
     configureLabel(broncoMaxLabel, "Bronco Max");
@@ -552,7 +675,7 @@ MiguelMusicAssistantAudioProcessorEditor(
     broncoMaxKnob.setTextBoxStyle(
         juce::Slider::TextBoxBelow, false, 82, 22);
     broncoMaxKnob.setColour(juce::Slider::rotarySliderFillColourId,
-                           MiguelColours::orange());
+                           MiguelColours::yellow());
     broncoMaxKnob.onValueChange = [this]
     {
         processor.getSectionEqBank().get(AudioSection::samples)
@@ -567,7 +690,11 @@ MiguelMusicAssistantAudioProcessorEditor(
     importedSampleList.onSelectionChanged = [this](const juce::File& file)
     {
         if (file.existsAsFile())
+        {
             updateSelectedSample(file);
+            if (processor.isSamplePlaying())
+                processor.playSlots(importedSampleList.getSelectedSlots());
+        }
         else
         {
             selectedSample = {};
@@ -579,8 +706,7 @@ MiguelMusicAssistantAudioProcessorEditor(
     importedSampleList.onFileDoubleClicked = [this](const juce::File& file)
     {
         updateSelectedSample(file);
-        if (selectedSample.existsAsFile())
-            processor.playSample();
+        processor.playSlots(importedSampleList.getSelectedSlots());
     };
     importedSampleList.onSampleCountChanged = [this](int count)
     {
@@ -588,6 +714,25 @@ MiguelMusicAssistantAudioProcessorEditor(
                                 + (count == 1 ? " sample importado"
                                               : " samples importados"),
                             juce::dontSendNotification);
+    };
+    importedSampleList.onSlotLoaded = [this](int slot, const juce::File& file)
+    {
+        if (file.existsAsFile())
+            processor.loadLayerSample(slot, file);
+        else
+            processor.getLayerBank().clearSlot(slot);
+    };
+    importedSampleList.onMuteChanged = [this](int slot, bool muted)
+    {
+        processor.getLayerBank().setMuted(slot, muted);
+    };
+    importedSampleList.onVolumeChanged = [this](int slot, float volume)
+    {
+        processor.getLayerBank().setVolume(slot, volume);
+    };
+    importedSampleList.onEqChanged = [this](int slot, float amount)
+    {
+        processor.getLayerBank().setEqTilt(slot, amount);
     };
     sampleLoopButton.setClickingTogglesState(true);
     sampleLoopButton.setToggleState(true, juce::dontSendNotification);
@@ -598,61 +743,88 @@ MiguelMusicAssistantAudioProcessorEditor(
     {
         processor.setSampleLooping(sampleLoopButton.getToggleState());
     };
+    sampleReverseButton.setClickingTogglesState(true);
+    sampleReverseButton.setToggleState(false, juce::dontSendNotification);
+    sampleReverseButton.setColour(juce::TextButton::buttonOnColourId,
+                                  MiguelColours::green());
+    sampleReverseButton.onClick = [this]
+    {
+        processor.setSampleReversed(sampleReverseButton.getToggleState());
+    };
     samplePlayButton.onClick = [this] { toggleSampleTrigger(); };
-    sampleStopButton.onClick = [this] { processor.stopSamplePlayback(); };
     sampleDragButton.onClick = [this]
     {
         if (selectedSample.existsAsFile())
             selectedSample.revealToUser();
     };
 
-    configureLabel(sampleEqTitle, "EQ del sample");
-    sampleEqTitle.setFont(juce::FontOptions(16.0f, juce::Font::bold));
-    configureLabel(sampleEqLowLabel, "LOW");
-    configureLabel(sampleEqMidLabel, "MID");
-    configureLabel(sampleEqHighLabel, "HIGH");
-    sampleEqLowLabel.setJustificationType(juce::Justification::centred);
-    sampleEqMidLabel.setJustificationType(juce::Justification::centred);
-    sampleEqHighLabel.setJustificationType(juce::Justification::centred);
-    static const juce::Colour sampleEqColours[]{
-        MiguelColours::green(), MiguelColours::cyan(), MiguelColours::orange()
+    static const juce::String eqNames[]{
+        "60", "160", "400", "1k", "2.5k", "6.3k", "12k"
     };
-    for (int band = 0; band < 3; ++band)
+    static const juce::Colour sampleEqColours[]{
+        MiguelColours::blue(), MiguelColours::lilac(), MiguelColours::cyan(),
+        MiguelColours::green(), MiguelColours::purple(), MiguelColours::blue(),
+        MiguelColours::lilac()
+    };
+    for (int band = 0; band < MiguelMusicAssistantAudioProcessor::sampleEqBandCount; ++band)
     {
-        auto& knob = sampleEqKnobs[static_cast<size_t>(band)];
-        knob.setRange(-18.0, 18.0, 0.1);
-        knob.setValue(processor.getSampleEqGain(band),
-                      juce::dontSendNotification);
-        knob.setTextValueSuffix(" dB");
-        knob.setDoubleClickReturnValue(true, 0.0);
-        knob.setColour(juce::Slider::rotarySliderFillColourId,
-                       sampleEqColours[band]);
-        knob.onValueChange = [this, band]
+        configureLabel(sampleEqBandLabels[static_cast<size_t>(band)],
+                       eqNames[band]);
+        sampleEqBandLabels[static_cast<size_t>(band)]
+            .setJustificationType(juce::Justification::centred);
+        auto& slider = sampleEqSliders[static_cast<size_t>(band)];
+        slider.setSliderStyle(juce::Slider::LinearVertical);
+        slider.setTextBoxStyle(juce::Slider::NoTextBox, false, 0, 0);
+        slider.setRange(-18.0, 18.0, 0.1);
+        slider.setWheelStepMultiplier(4.0);
+        slider.setValue(processor.getSampleEqGain(band),
+                        juce::dontSendNotification);
+        slider.setDoubleClickReturnValue(true, 0.0);
+        slider.setColour(juce::Slider::thumbColourId, sampleEqColours[band]);
+        slider.setColour(juce::Slider::trackColourId, sampleEqColours[band]);
+        slider.onValueChange = [this, band]
         {
             processor.setSampleEqGain(
                 band,
                 static_cast<float>(
-                    sampleEqKnobs[static_cast<size_t>(band)].getValue()));
+                    sampleEqSliders[static_cast<size_t>(band)].getValue()));
         };
     }
     sampleEqResetButton.onClick = [this]
     {
-        for (int band = 0; band < 3; ++band)
-            sampleEqKnobs[static_cast<size_t>(band)].setValue(0.0);
+        for (int band = 0; band < MiguelMusicAssistantAudioProcessor::sampleEqBandCount; ++band)
+            sampleEqSliders[static_cast<size_t>(band)].setValue(0.0);
     };
 
-    configureLabel(sampleTrimLabel, "Recortar");
-    sampleTrimLabel.setJustificationType(juce::Justification::centred);
-    sampleTrimKnob.setRange(5.0, 100.0, 1.0);
-    sampleTrimKnob.setValue(100.0);
-    sampleTrimKnob.setTextValueSuffix(" %");
-    sampleTrimKnob.setDoubleClickReturnValue(true, 100.0);
-    sampleTrimKnob.setColour(juce::Slider::rotarySliderFillColourId,
-                             MiguelColours::pink());
-    sampleTrimKnob.onValueChange = [this]
+    configureLabel(sampleTrimStartLabel, "Inicio");
+    sampleTrimStartLabel.setJustificationType(juce::Justification::centred);
+    sampleTrimStartKnob.setRange(0.0, 90.0, 1.0);
+    sampleTrimStartKnob.setValue(0.0);
+    sampleTrimStartKnob.setTextValueSuffix(" %");
+    sampleTrimStartKnob.setDoubleClickReturnValue(true, 0.0);
+    sampleTrimStartKnob.setWheelStepMultiplier(1.0);
+    sampleTrimStartKnob.setMouseDragSensitivity(2500);
+    sampleTrimStartKnob.setColour(juce::Slider::rotarySliderFillColourId,
+                                  MiguelColours::yellow());
+    sampleTrimStartKnob.onValueChange = [this]
     {
-        processor.setSampleTrim(
-            static_cast<float>(sampleTrimKnob.getValue() / 100.0));
+        processor.setSampleTrimStart(
+            static_cast<float>(sampleTrimStartKnob.getValue() / 100.0));
+    };
+    configureLabel(sampleTrimEndLabel, "Final");
+    sampleTrimEndLabel.setJustificationType(juce::Justification::centred);
+    sampleTrimEndKnob.setRange(10.0, 100.0, 1.0);
+    sampleTrimEndKnob.setValue(100.0);
+    sampleTrimEndKnob.setTextValueSuffix(" %");
+    sampleTrimEndKnob.setDoubleClickReturnValue(true, 100.0);
+    sampleTrimEndKnob.setWheelStepMultiplier(1.0);
+    sampleTrimEndKnob.setMouseDragSensitivity(2500);
+    sampleTrimEndKnob.setColour(juce::Slider::rotarySliderFillColourId,
+                                MiguelColours::orange());
+    sampleTrimEndKnob.onValueChange = [this]
+    {
+        processor.setSampleTrimEnd(
+            static_cast<float>(sampleTrimEndKnob.getValue() / 100.0));
     };
     configureLabel(sampleFadeInLabel, "Entrada");
     sampleFadeInLabel.setJustificationType(juce::Justification::centred);
@@ -660,8 +832,10 @@ MiguelMusicAssistantAudioProcessorEditor(
     sampleFadeInKnob.setValue(0.0);
     sampleFadeInKnob.setTextValueSuffix(" %");
     sampleFadeInKnob.setDoubleClickReturnValue(true, 0.0);
+    sampleFadeInKnob.setWheelStepMultiplier(1.0);
+    sampleFadeInKnob.setMouseDragSensitivity(2500);
     sampleFadeInKnob.setColour(juce::Slider::rotarySliderFillColourId,
-                               MiguelColours::green());
+                               MiguelColours::blue());
     sampleFadeInKnob.onValueChange = [this]
     {
         processor.setSampleFadeIn(
@@ -673,8 +847,10 @@ MiguelMusicAssistantAudioProcessorEditor(
     sampleFadeOutKnob.setValue(0.0);
     sampleFadeOutKnob.setTextValueSuffix(" %");
     sampleFadeOutKnob.setDoubleClickReturnValue(true, 0.0);
+    sampleFadeOutKnob.setWheelStepMultiplier(1.0);
+    sampleFadeOutKnob.setMouseDragSensitivity(2500);
     sampleFadeOutKnob.setColour(juce::Slider::rotarySliderFillColourId,
-                                MiguelColours::orange());
+                                MiguelColours::lilac());
     sampleFadeOutKnob.onValueChange = [this]
     {
         processor.setSampleFadeOut(
@@ -687,7 +863,6 @@ MiguelMusicAssistantAudioProcessorEditor(
              static_cast<juce::Component*>(&bajoquintoDescription),
              static_cast<juce::Component*>(&layerPlayButton),
              static_cast<juce::Component*>(&layerLoopButton),
-             static_cast<juce::Component*>(&layerStopButton),
              static_cast<juce::Component*>(&layerStatus) })
         bajoquintoPage.addAndMakeVisible(child);
 
@@ -711,20 +886,15 @@ MiguelMusicAssistantAudioProcessorEditor(
     layerPlayButton.onClick = [this]
     {
         processor.getLayerBank().setLooping(layerLoopButton.getToggleState());
-        processor.getLayerBank().start();
+        toggleSampleTrigger();
         layerStatus.setText(
             processor.getLayerBank().isPlaying()
-                ? "Reproduciendo los 4 cuadros juntos."
-                : "Carga al menos un sample para escuchar.",
+                ? "Reproduciendo la seleccion."
+                : "Selecciona un sample para escuchar.",
             juce::dontSendNotification);
     };
-    layerStopButton.onClick = [this]
-    {
-        processor.getLayerBank().stop();
-        layerStatus.setText("Detenido.", juce::dontSendNotification);
-    };
 
-    for (int slot = 0; slot < SampleLayerBank::slotCount; ++slot)
+    for (int slot = 0; slot < 4; ++slot)
     {
         auto& card = layerCards[static_cast<size_t>(slot)];
         auto& title = layerTitles[static_cast<size_t>(slot)];
@@ -994,9 +1164,12 @@ void MiguelMusicAssistantAudioProcessorEditor::paint(juce::Graphics& graphics)
 
 void MiguelMusicAssistantAudioProcessorEditor::resized()
 {
-    auto bounds = getLocalBounds().reduced(8);
-    tabs.setBounds(bounds);
-    capturePad.setBounds(bounds.getRight() - 68, bounds.getY() + 42, 64, 64);
+    auto bounds = getLocalBounds();
+    menuBar.setBounds(bounds.removeFromTop(22));
+    auto brandRow = bounds.removeFromTop(56);
+    capturePad.setBounds(brandRow.removeFromRight(64).reduced(4, 4));
+    brandBar.setBounds(brandRow);
+    libraryPage.setBounds(bounds.reduced(8, 4));
     capturePad.toFront(false);
 
     auto generator = generatorPage.getLocalBounds().reduced(24);
@@ -1077,9 +1250,9 @@ void MiguelMusicAssistantAudioProcessorEditor::resized()
 
     auto left = library;
     auto sampleControls = left.removeFromTop(34);
-    samplePlayButton.setBounds(sampleControls.removeFromLeft(120).reduced(3));
-    sampleLoopButton.setBounds(sampleControls.removeFromLeft(80).reduced(3));
-    sampleStopButton.setBounds(sampleControls.removeFromLeft(110).reduced(3));
+    samplePlayButton.setBounds(sampleControls.removeFromLeft(34).reduced(1));
+    sampleLoopButton.setBounds(sampleControls.removeFromLeft(64).reduced(3));
+    sampleReverseButton.setBounds(sampleControls.removeFromLeft(56).reduced(3));
     sampleDragButton.setBounds(sampleControls.removeFromLeft(180).reduced(3));
     sampleInfo.setBounds(sampleControls.reduced(8, 0));
     left.removeFromTop(6);
@@ -1101,15 +1274,15 @@ void MiguelMusicAssistantAudioProcessorEditor::resized()
     }
     {
         auto inner = eqCell.contentArea();
-        sampleEqResetButton.setBounds(inner.removeFromRight(72).reduced(4, 18));
-        const auto cellW = juce::jmax(1, inner.getWidth() / 3);
-        for (int band = 0; band < 3; ++band)
+        sampleEqResetButton.setBounds(inner.removeFromRight(56).reduced(2, 10));
+        const auto cellW = juce::jmax(
+            1, inner.getWidth() / MiguelMusicAssistantAudioProcessor::sampleEqBandCount);
+        for (int band = 0; band < MiguelMusicAssistantAudioProcessor::sampleEqBandCount; ++band)
         {
             auto cell = inner.removeFromLeft(cellW);
-            auto& label = band == 0 ? sampleEqLowLabel
-                : band == 1 ? sampleEqMidLabel : sampleEqHighLabel;
-            label.setBounds(cell.removeFromTop(16));
-            sampleEqKnobs[static_cast<size_t>(band)].setBounds(cell.reduced(4, 0));
+            sampleEqBandLabels[static_cast<size_t>(band)].setBounds(
+                cell.removeFromBottom(16));
+            sampleEqSliders[static_cast<size_t>(band)].setBounds(cell.reduced(2, 0));
         }
     }
     left.removeFromTop(6);
@@ -1118,10 +1291,24 @@ void MiguelMusicAssistantAudioProcessorEditor::resized()
     trimCell.setBounds(shapeRow.removeFromLeft(shapeW));
     fadeInCell.setBounds(shapeRow.removeFromLeft(shapeW));
     fadeOutCell.setBounds(shapeRow);
-    sampleTrimKnob.setBounds(trimCell.contentArea().reduced(8, 0));
+    {
+        auto inner = trimCell.contentArea();
+        auto leftKnob = inner.removeFromLeft(inner.getWidth() / 2);
+        sampleTrimStartLabel.setBounds(leftKnob.removeFromTop(16));
+        sampleTrimStartKnob.setBounds(leftKnob.reduced(4, 0));
+        sampleTrimEndLabel.setBounds(inner.removeFromTop(16));
+        sampleTrimEndKnob.setBounds(inner.reduced(4, 0));
+    }
     sampleFadeInKnob.setBounds(fadeInCell.contentArea().reduced(8, 0));
     sampleFadeOutKnob.setBounds(fadeOutCell.contentArea().reduced(8, 0));
     left.removeFromTop(6);
+    {
+        const auto pianoKeysH = ReferencePianoComponent::keyHeight();
+        auto pianoStrip = left.removeFromBottom(pianoKeysH + 18);
+        left.removeFromBottom(6);
+        referencePianoCaption.setBounds(pianoStrip.removeFromBottom(16));
+        referencePiano.setBounds(pianoStrip);
+    }
     rackPanel.setBounds(left);
 
     auto bajoquinto = bajoquintoPage.getLocalBounds().reduced(22);
@@ -1131,14 +1318,13 @@ void MiguelMusicAssistantAudioProcessorEditor::resized()
     auto actions = bajoquinto.removeFromTop(44);
     layerPlayButton.setBounds(actions.removeFromLeft(160).reduced(3));
     layerLoopButton.setBounds(actions.removeFromLeft(100).reduced(3));
-    layerStopButton.setBounds(actions.removeFromLeft(120).reduced(3));
     layerStatus.setBounds(actions.reduced(8, 4));
     bajoquinto.removeFromTop(10);
 
     const auto gap = 12;
     const auto cardWidth = (bajoquinto.getWidth() - gap) / 2;
     const auto cardHeight = (bajoquinto.getHeight() - gap) / 2;
-    for (int slot = 0; slot < SampleLayerBank::slotCount; ++slot)
+    for (int slot = 0; slot < 4; ++slot)
     {
         const auto column = slot % 2;
         const auto rowIndex = slot / 2;
@@ -1180,7 +1366,7 @@ void MiguelMusicAssistantAudioProcessorEditor::updateSelectedSample(
     detectedFrequency = 0.0;
     detectedMidiExact = 0.0;
     pitchShiftKnob.setValue(0.0, juce::dontSendNotification);
-    processor.setSamplePitchSemitones(0.0);
+    processor.setSamplePitchSemitones(0.0, importedSampleList.getSelectedSlot());
     tunerNeedle.clear();
     sampleWaveform.setFile(file);
     const auto sizeMb = static_cast<double>(file.getSize()) / (1024.0 * 1024.0);
@@ -1317,7 +1503,7 @@ void MiguelMusicAssistantAudioProcessorEditor::applyLayerFiles(
 void MiguelMusicAssistantAudioProcessorEditor::refreshLayerSlotButtons()
 {
     auto& layers = processor.getLayerBank();
-    for (int slot = 0; slot < SampleLayerBank::slotCount; ++slot)
+    for (int slot = 0; slot < 4; ++slot)
         layerLoadButtons[static_cast<size_t>(slot)].setButtonText(
             layers.getSlotName(slot));
 }
@@ -1572,6 +1758,7 @@ void MiguelMusicAssistantAudioProcessorEditor::parentHierarchyChanged()
     keyListenerHost = getTopLevelComponent();
     if (keyListenerHost != nullptr)
         keyListenerHost->addKeyListener(this);
+    applyWindowChrome();
 }
 
 bool MiguelMusicAssistantAudioProcessorEditor::keyPressed(
@@ -1609,6 +1796,7 @@ void MiguelMusicAssistantAudioProcessorEditor::visibilityChanged()
 {
     if (isShowing())
         grabKeyboardFocus();
+    applyWindowChrome();
 }
 
 void MiguelMusicAssistantAudioProcessorEditor::toggleCapturePad()
@@ -1620,27 +1808,17 @@ void MiguelMusicAssistantAudioProcessorEditor::toggleCapturePad()
 void MiguelMusicAssistantAudioProcessorEditor::toggleSampleTrigger()
 {
     processor.setSampleLooping(sampleLoopButton.getToggleState());
-    if (!selectedSample.existsAsFile())
-    {
-        const auto selected = importedSampleList.getSelectedFile();
-        if (selected.existsAsFile())
-            updateSelectedSample(selected);
-        else
-        {
-            const auto paths = importedSampleList.getFilePaths();
-            if (paths.isEmpty())
-                return;
-            updateSelectedSample(juce::File(paths[0]));
-        }
-    }
-    processor.toggleSamplePlayback();
+    processor.setSampleReversed(sampleReverseButton.getToggleState());
+    if (processor.isSamplePlaying())
+        processor.stopSamplePlayback();
+    else
+        processor.playSlots(importedSampleList.getSelectedSlots());
 }
 
 void MiguelMusicAssistantAudioProcessorEditor::timerCallback()
 {
     rackPanel.pushLeds();
-    samplePlayButton.setButtonText(
-        processor.isSamplePlaying() ? "Reproduciendo..." : "Escuchar");
+    samplePlayButton.setPlaying(processor.isSamplePlaying());
     layerPlayButton.setButtonText(
         processor.getLayerBank().isPlaying() ? "Reproduciendo..." : "Escuchar");
     capturePad.setMode(processor.getCaptureState() == 3
@@ -1654,9 +1832,13 @@ void MiguelMusicAssistantAudioProcessorEditor::timerCallback()
         capturePad.setMode(0);
     }
     auto& layers = processor.getLayerBank();
-    for (int slot = 0; slot < SampleLayerBank::slotCount; ++slot)
+    for (int slot = 0; slot < 4; ++slot)
         layerMuteLeds[static_cast<size_t>(slot)].setLevel(
-            layers.getLed(slot), layers.isMuted(slot));
+            importedSampleList.getSelectedSlot() == slot
+                && !layers.isMuted(slot) ? 1.0f : 0.0f,
+            false);
+    for (int slot = 0; slot < SampleLayerBank::slotCount; ++slot)
+        importedSampleList.setSlotLed(slot);
 }
 
 void MiguelMusicAssistantAudioProcessorEditor::syncSessionStateToProcessor()
@@ -1688,6 +1870,8 @@ juce::ValueTree MiguelMusicAssistantAudioProcessorEditor::captureUiSessionState(
     juce::ValueTree bajoquinto("Bajoquinto");
     bajoquinto.setProperty(
         "looping", processor.getLayerBank().isLooping() ? 1 : 0, nullptr);
+    bajoquinto.setProperty(
+        "reversed", processor.getLayerBank().isReversed() ? 1 : 0, nullptr);
     for (int slot = 0; slot < SampleLayerBank::slotCount; ++slot)
     {
         juce::ValueTree layer("Slot");
@@ -1705,14 +1889,13 @@ juce::ValueTree MiguelMusicAssistantAudioProcessorEditor::captureUiSessionState(
     ui.appendChild(bajoquinto, nullptr);
 
     juce::ValueTree sampleEq("SampleEq");
-    sampleEq.setProperty("low", processor.getSampleEqGain(0), nullptr);
-    sampleEq.setProperty("mid", processor.getSampleEqGain(1), nullptr);
-    sampleEq.setProperty("high", processor.getSampleEqGain(2), nullptr);
+    for (int band = 0; band < MiguelMusicAssistantAudioProcessor::sampleEqBandCount; ++band)
+        sampleEq.setProperty("b" + juce::String(band),
+                             processor.getSampleEqGain(band), nullptr);
     ui.appendChild(sampleEq, nullptr);
 
     ui.setProperty("selectedSamplePath",
                    selectedSample.getFullPathName(), nullptr);
-    ui.setProperty("activeTab", tabs.getCurrentTabIndex(), nullptr);
     return ui;
 }
 
@@ -1765,7 +1948,12 @@ void MiguelMusicAssistantAudioProcessorEditor::restoreUiSessionState(
         const auto looping = static_cast<int>(
             bajoquinto.getProperty("looping", 1)) != 0;
         layerLoopButton.setToggleState(looping, juce::dontSendNotification);
+        sampleLoopButton.setToggleState(looping, juce::dontSendNotification);
         processor.getLayerBank().setLooping(looping);
+        const auto reversed = static_cast<int>(
+            bajoquinto.getProperty("reversed", 0)) != 0;
+        sampleReverseButton.setToggleState(reversed, juce::dontSendNotification);
+        processor.setSampleReversed(reversed);
 
         for (int i = 0; i < bajoquinto.getNumChildren(); ++i)
         {
@@ -1776,14 +1964,17 @@ void MiguelMusicAssistantAudioProcessorEditor::restoreUiSessionState(
             if (!juce::isPositiveAndBelow(slot, SampleLayerBank::slotCount))
                 continue;
 
-            layerVolumeKnobs[static_cast<size_t>(slot)].setValue(
-                static_cast<double>(layer.getProperty("volume", 1.0)),
-                juce::dontSendNotification);
+            if (slot < 4)
+            {
+                layerVolumeKnobs[static_cast<size_t>(slot)].setValue(
+                    static_cast<double>(layer.getProperty("volume", 1.0)),
+                    juce::dontSendNotification);
+                layerPitchKnobs[static_cast<size_t>(slot)].setValue(
+                    static_cast<double>(layer.getProperty("pitch", 0.0)),
+                    juce::dontSendNotification);
+            }
             processor.getLayerBank().setVolume(
                 slot, static_cast<float>(layer.getProperty("volume", 1.0)));
-            layerPitchKnobs[static_cast<size_t>(slot)].setValue(
-                static_cast<double>(layer.getProperty("pitch", 0.0)),
-                juce::dontSendNotification);
             processor.getLayerBank().setPitchSemitones(
                 slot, static_cast<double>(layer.getProperty("pitch", 0.0)));
             processor.getLayerBank().setMuted(
@@ -1804,18 +1995,18 @@ void MiguelMusicAssistantAudioProcessorEditor::restoreUiSessionState(
     if (const auto sampleEq = uiState.getChildWithName("SampleEq");
         sampleEq.isValid())
     {
-        sampleEqKnobs[0].setValue(
-            static_cast<double>(sampleEq.getProperty("low", 0.0)));
-        sampleEqKnobs[1].setValue(
-            static_cast<double>(sampleEq.getProperty("mid", 0.0)));
-        sampleEqKnobs[2].setValue(
-            static_cast<double>(sampleEq.getProperty("high", 0.0)));
+        for (int band = 0; band < MiguelMusicAssistantAudioProcessor::sampleEqBandCount; ++band)
+        {
+            const auto key = "b" + juce::String(band);
+            const auto fallback = band == 0 ? "low"
+                : band == 2 ? "mid"
+                : band == 4 ? "high" : juce::String();
+            auto value = static_cast<double>(sampleEq.getProperty(key, 0.0));
+            if (std::abs(value) < 0.001 && fallback.isNotEmpty())
+                value = static_cast<double>(sampleEq.getProperty(fallback, 0.0));
+            sampleEqSliders[static_cast<size_t>(band)].setValue(value);
+        }
     }
-
-    const auto tabIndex = static_cast<int>(uiState.getProperty("activeTab", 0));
-    const auto remappedTab = tabIndex >= 2 ? 0 : tabIndex;
-    tabs.setCurrentTabIndex(
-        juce::jlimit(0, tabs.getNumTabs() - 1, remappedTab));
 
     updateEqControls();
     refreshLayerSlotButtons();
@@ -1830,4 +2021,164 @@ void MiguelMusicAssistantAudioProcessorEditor::restoreUiSessionState(
         if (file.existsAsFile())
             updateSelectedSample(file);
     }
+}
+
+juce::StringArray MiguelMusicAssistantAudioProcessorEditor::getMenuBarNames()
+{
+    return { "Archivo", "Ventana" };
+}
+
+juce::PopupMenu MiguelMusicAssistantAudioProcessorEditor::getMenuForIndex(
+    int index, const juce::String&)
+{
+    juce::PopupMenu menu;
+    if (index == 0)
+    {
+        menu.addItem(1, "Abrir...");
+        menu.addItem(2, "Guardar");
+        menu.addItem(3, "Guardar como...");
+        menu.addSeparator();
+        menu.addItem(4, "Exportar samples seleccionados...");
+        menu.addSeparator();
+        menu.addItem(5, "Salir");
+    }
+    else if (index == 1)
+    {
+        menu.addItem(10, "Maximizar");
+        menu.addItem(11, "Restaurar");
+    }
+    return menu;
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::menuItemSelected(
+    int itemId, int)
+{
+    switch (itemId)
+    {
+        case 1: openSession(); break;
+        case 2: saveSession(false); break;
+        case 3: saveSession(true); break;
+        case 4: exportSelectedSamples(); break;
+        case 5:
+            if (auto* app = juce::JUCEApplicationBase::getInstance())
+                app->systemRequestedQuit();
+            break;
+        case 10: maximiseWindow(); break;
+        case 11: restoreWindow(); break;
+        default: break;
+    }
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::openSession()
+{
+    fileChooser = std::make_unique<juce::FileChooser>(
+        "Abrir sesion",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+            .getChildFile("Miguel Music Assistant"),
+        "*.pichadaw;*.xml");
+    fileChooser->launchAsync(
+        juce::FileBrowserComponent::openMode
+            | juce::FileBrowserComponent::canSelectFiles,
+        [this](const juce::FileChooser& chooser)
+        {
+            const auto file = chooser.getResult();
+            if (!file.existsAsFile())
+                return;
+            const auto xml = juce::parseXML(file);
+            if (xml == nullptr)
+                return;
+            sessionFile = file;
+            processor.restoreFullSessionState(juce::ValueTree::fromXml(*xml));
+            restoreUiSessionState(processor.getUiSessionState());
+        });
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::saveSession(bool saveAs)
+{
+    syncSessionStateToProcessor();
+    const auto writeTo = [this](const juce::File& file)
+    {
+        sessionFile = file;
+        file.getParentDirectory().createDirectory();
+        if (auto xml = processor.buildFullSessionState().createXml())
+            xml->writeTo(file);
+    };
+    if (!saveAs && sessionFile.existsAsFile())
+    {
+        writeTo(sessionFile);
+        return;
+    }
+    fileChooser = std::make_unique<juce::FileChooser>(
+        "Guardar sesion",
+        sessionFile.existsAsFile()
+            ? sessionFile
+            : juce::File::getSpecialLocation(juce::File::userDocumentsDirectory)
+                  .getChildFile("Miguel Music Assistant")
+                  .getChildFile("sesion.pichadaw"),
+        "*.pichadaw;*.xml");
+    fileChooser->launchAsync(
+        juce::FileBrowserComponent::saveMode
+            | juce::FileBrowserComponent::canSelectFiles
+            | juce::FileBrowserComponent::warnAboutOverwriting,
+        [this, writeTo](const juce::FileChooser& chooser)
+        {
+            auto file = chooser.getResult();
+            if (file.getFileName().isEmpty())
+                return;
+            if (file.getFileExtension().isEmpty())
+                file = file.withFileExtension(".pichadaw");
+            writeTo(file);
+        });
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::exportSelectedSamples()
+{
+    auto files = importedSampleList.getSelectedFiles();
+    if (files.isEmpty() && selectedSample.existsAsFile())
+        files.add(selectedSample);
+    if (files.isEmpty())
+        return;
+    fileChooser = std::make_unique<juce::FileChooser>(
+        "Carpeta para exportar samples",
+        juce::File::getSpecialLocation(juce::File::userDocumentsDirectory),
+        "*");
+    fileChooser->launchAsync(
+        juce::FileBrowserComponent::openMode
+            | juce::FileBrowserComponent::canSelectDirectories,
+        [this, files](const juce::FileChooser& chooser)
+        {
+            auto folder = chooser.getResult();
+            if (!folder.isDirectory())
+                return;
+            auto copied = 0;
+            for (const auto& file : files)
+                if (file.copyFileTo(folder.getChildFile(file.getFileName())))
+                    ++copied;
+            sampleInfo.setText("Exportados " + juce::String(copied) + " samples.",
+                               juce::dontSendNotification);
+        });
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::applyWindowChrome()
+{
+#if JucePlugin_Build_Standalone
+    if (auto* window = findParentComponentOfClass<juce::DocumentWindow>())
+    {
+        window->setName("PICHADAW");
+        window->setUsingNativeTitleBar(true);
+        window->setTitleBarButtonsRequired(juce::DocumentWindow::allButtons, false);
+    }
+#endif
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::maximiseWindow()
+{
+    if (auto* window = findParentComponentOfClass<juce::ResizableWindow>())
+        window->setFullScreen(true);
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::restoreWindow()
+{
+    if (auto* window = findParentComponentOfClass<juce::ResizableWindow>())
+        window->setFullScreen(false);
 }

@@ -1,0 +1,14 @@
+---
+description: Compilar y comprobar que funciona antes de decir que está listo
+alwaysApply: true
+---
+
+# Verificar antes de terminar
+
+The rules don't help if they aren't followed in the same turn.
+
+- Compile only the touched target.
+- A process that doesn't crash is **not** an audio test.
+- If the request is sound: measure the mix or say you didn't hear it.
+- Copy the exe to the Desktop when the user uses that shortcut.
+

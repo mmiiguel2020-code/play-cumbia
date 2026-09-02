@@ -11,7 +11,7 @@ juce::String BajxterFxEditor::slotTitle(FxSlot slot)
         case FxSlot::doubler:     return "Duplicador";
         case FxSlot::distortion:  return "Distorsion";
         case FxSlot::delay:       return "Delay";
-        case FxSlot::efecto:      return "Efecto";
+        case FxSlot::efecto:      return "Reverb";
         case FxSlot::volume:      return "Volumen";
         case FxSlot::velocity:    return "Velocity";
         default:                  return "FX";

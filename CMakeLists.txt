@@ -5,7 +5,7 @@ project(MiguelMusicAssistant VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-option(BAJXTER_BUILD_APP "Compilar Bajxterbeta (app y VST3)" ON)
+option(BAJXTER_BUILD_APP "Compilar PICHADAW (app y VST3)" ON)
 option(BAJXTER_BUILD_FX "Compilar plugins de efectos" ON)
 
 set(JUCE_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
@@ -73,7 +73,8 @@ if(BAJXTER_BUILD_APP)
         PLUGIN_MANUFACTURER_CODE MgAu
         PLUGIN_CODE MmAs
         FORMATS Standalone VST3
-        PRODUCT_NAME "Bajxterbeta"
+        PRODUCT_NAME "PICHADAW"
+        ICON_BIG "${CMAKE_SOURCE_DIR}/Assets/PICHADAW.png"
         IS_SYNTH FALSE
         IS_MIDI_EFFECT FALSE
         NEEDS_MIDI_INPUT TRUE
@@ -97,6 +98,8 @@ if(BAJXTER_BUILD_APP)
         Source/App/PluginEditor.h
         Source/App/PluginProcessor.cpp
         Source/App/PluginProcessor.h
+        Source/App/ReferencePiano.cpp
+        Source/App/ReferencePiano.h
         Source/App/RackPanel.cpp
         Source/App/RackPanel.h
         Source/App/SessionState.cpp

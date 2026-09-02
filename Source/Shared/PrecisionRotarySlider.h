@@ -2,7 +2,18 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
-class PrecisionRotarySlider final : public juce::Slider
+class FineWheelSlider : public juce::Slider
+{
+public:
+    void setWheelStepMultiplier(double multiplier);
+    void mouseWheelMove(const juce::MouseEvent&,
+                        const juce::MouseWheelDetails&) override;
+
+private:
+    double wheelStepMultiplier = 1.0;
+};
+
+class PrecisionRotarySlider final : public FineWheelSlider
 {
 public:
     PrecisionRotarySlider();

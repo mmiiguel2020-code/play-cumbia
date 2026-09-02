@@ -13,7 +13,7 @@ const char* slotTitle(FxSlot slot)
         case FxSlot::doubler:     return "Duplicador";
         case FxSlot::distortion:  return "Distorsion";
         case FxSlot::delay:       return "Delay";
-        case FxSlot::efecto:      return "Efecto";
+        case FxSlot::efecto:      return "Reverb";
         case FxSlot::volume:      return "Volumen";
         case FxSlot::velocity:    return "Velocity";
         default:                  return "";
@@ -54,6 +54,14 @@ void SignalLed::paint(juce::Graphics& g)
     auto lamp = bounds.withSizeKeepingCentre(d, d);
     g.setColour(juce::Colours::black.withAlpha(0.55f));
     g.fillEllipse(lamp.translated(0.0f, 1.5f));
+    if (!muted && level < 0.04f)
+    {
+        g.setColour(MiguelColours::panelHighlight());
+        g.fillEllipse(lamp);
+        g.setColour(MiguelColours::border());
+        g.drawEllipse(lamp, 1.2f);
+        return;
+    }
     auto colour = muted ? MiguelColours::danger()
                         : (reverseGlow ? MiguelColours::purple()
                                        : MiguelColours::green());
@@ -80,26 +88,14 @@ RackPanel::RackPanel(FxRack& rackToUse)
     setOpaque(true);
     addAndMakeVisible(title);
     addAndMakeVisible(hint);
-    addAndMakeVisible(inLedL);
-    addAndMakeVisible(inLedR);
-    addAndMakeVisible(outLedL);
-    addAndMakeVisible(outLedR);
-    addAndMakeVisible(inLabel);
-    addAndMakeVisible(outLabel);
     addAndMakeVisible(masterMuteButton);
     addAndMakeVisible(masterLed);
 
     title.setText("RACK BRONCO / PERILLAS GRANDES", juce::dontSendNotification);
     title.setFont(juce::FontOptions(26.0f, juce::Font::bold));
     title.setColour(juce::Label::textColourId, MiguelColours::text());
-    hint.setText(
-        "Mutea cada modulo. Los LEDs siguen la senal de entrada y salida.",
-        juce::dontSendNotification);
+    hint.setText("Mutea cada modulo.", juce::dontSendNotification);
     hint.setColour(juce::Label::textColourId, MiguelColours::textMuted());
-    inLabel.setText("IN", juce::dontSendNotification);
-    outLabel.setText("OUT", juce::dontSendNotification);
-    inLabel.setJustificationType(juce::Justification::centred);
-    outLabel.setJustificationType(juce::Justification::centred);
 
     masterMuteButton.setClickingTogglesState(true);
     masterMuteButton.setColour(juce::TextButton::buttonOnColourId,
@@ -118,6 +114,8 @@ RackPanel::RackPanel(FxRack& rackToUse)
         addAndMakeVisible(ui.mute);
         addAndMakeVisible(ui.led);
         ui.knob.setHuge(true);
+        ui.knob.setWheelStepMultiplier(7.5);
+        ui.knob.setMouseDragSensitivity(240);
         ui.knob.setRange(0.0, 100.0, 1.0);
         ui.knob.setTextValueSuffix(" %");
         ui.knob.setColour(juce::Slider::rotarySliderFillColourId,
@@ -157,14 +155,6 @@ void RackPanel::resized()
         bounds.removeFromTop(2);
 
     auto lights = bounds.removeFromTop(compact ? 28 : 48);
-    inLabel.setBounds(lights.removeFromLeft(compact ? 28 : 36));
-    inLedL.setBounds(lights.removeFromLeft(compact ? 26 : 36).reduced(2));
-    inLedR.setBounds(lights.removeFromLeft(compact ? 26 : 36).reduced(2));
-    lights.removeFromLeft(compact ? 8 : 12);
-    outLabel.setBounds(lights.removeFromLeft(compact ? 34 : 44));
-    outLedL.setBounds(lights.removeFromLeft(compact ? 26 : 36).reduced(2));
-    outLedR.setBounds(lights.removeFromLeft(compact ? 26 : 36).reduced(2));
-    lights.removeFromLeft(compact ? 10 : 16);
     masterLed.setBounds(lights.removeFromLeft(compact ? 26 : 36).reduced(2));
     masterMuteButton.setBounds(lights.removeFromLeft(compact ? 140 : 170).reduced(2));
 
@@ -218,10 +208,6 @@ void RackPanel::refreshFromRack()
 
 void RackPanel::pushLeds()
 {
-    inLedL.setLevel(rack.getInputLed(0), false);
-    inLedR.setLevel(rack.getInputLed(1), false);
-    outLedL.setLevel(rack.getOutputLed(0), rack.isMasterMute());
-    outLedR.setLevel(rack.getOutputLed(1), rack.isMasterMute());
     masterLed.setLevel(rack.isMasterMute() ? 1.0f : rack.getOutputLed(0),
                        rack.isMasterMute());
     for (auto& ui : slots)
@@ -238,6 +224,8 @@ void RackPanel::setCompact(bool compact)
     for (auto& ui : slots)
     {
         ui.knob.setHuge(!compact);
+        ui.knob.setWheelStepMultiplier(7.5);
+        ui.knob.setMouseDragSensitivity(compact ? 333 : 240);
         if (compact)
             ui.knob.setTextBoxStyle(juce::Slider::TextBoxBelow, false, 64, 16);
         ui.name.setFont(juce::FontOptions(compact ? 12.0f : 15.0f, juce::Font::bold));
