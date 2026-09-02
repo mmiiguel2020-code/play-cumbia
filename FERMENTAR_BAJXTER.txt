@@ -1,0 +1,25 @@
+﻿BAJXTER / BRONCO — fermentando 1 sep 2026 17:32
+================================================
+No tocar FL scripts. El 9 y PatternNav se quedan.
+
+App
+- Exe julio: AppData\Local\Programs\Miguel Music Assistant\Miguel Music Assistant.exe
+- Acceso: Escritorio\Bajxter Producer.lnk
+- Codigo: Documents\play-cumbia  (PRODUCT_NAME Bajxter Producer; falta VS para compilar)
+- Estilo Bronco. No pulses Generar 24 si no quieres regenerar; el motor ya es el bueno.
+
+Motor (polvos + alborada)
+- Escritorio\creador-acordes-bajoquinto\generar_acordes.py
+- Copia: Documents\tools_pc\generar_acordes_bajxter.py
+- Fuente: docerola 12rolacuerdaporcuerda.wav (no tonos basura)
+- Cadena Bronco: filtro tierra, distorsion organica, duplicador, neblina, excitador bajo, compresor lento
+
+Listo para escuchar
+- creador-acordes-bajoquinto\acordes_bronco  (24)
+- Documents\Miguel Music Assistant\Piano Bronco  (37)
+- Escritorio\bronco_samplers  (24 acordes + 37 notas)
+- Materia prima: Escritorio\tonos  (26 notas limpias; sin E2-G2)
+
+Siguiente (cuando despiertes)
+- Escuchar La mayor Bronco vs tarola en batx 1sep.flp (sampler, sin plugin Bronco)
+- Si pide compile: instalar VS Build Tools; no hay cl/MSBuild ahora

@@ -20,7 +20,7 @@ juce_add_plugin(MiguelMusicAssistant
     PLUGIN_MANUFACTURER_CODE MgAu
     PLUGIN_CODE MmAs
     FORMATS Standalone
-    PRODUCT_NAME "Miguel Music Assistant"
+    PRODUCT_NAME "Bajxter Producer"
     IS_SYNTH FALSE
     IS_MIDI_EFFECT FALSE
     NEEDS_MIDI_INPUT TRUE
