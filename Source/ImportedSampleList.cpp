@@ -9,6 +9,7 @@ ImportedSampleList::ImportedSampleList()
     list.setColour(juce::ListBox::backgroundColourId,
                    MiguelColours::panel());
     list.setOutlineThickness(0);
+    list.setWantsKeyboardFocus(false);
 }
 
 bool ImportedSampleList::isSupportedAudioFile(const juce::File& file)

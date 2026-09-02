@@ -151,6 +151,8 @@ public:
 
     void paint(juce::Graphics&) override;
     void resized() override;
+    void mouseDown(const juce::MouseEvent&) override;
+    void visibilityChanged() override;
     void parentHierarchyChanged() override;
     bool keyPressed(const juce::KeyPress&) override;
     bool keyPressed(const juce::KeyPress&, juce::Component*) override;

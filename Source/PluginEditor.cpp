@@ -375,13 +375,15 @@ juce::String foldButtonText(bool expanded, const juce::String& label)
     return (expanded ? "[v] " : "[>] ") + label;
 }
 
-void disableButtonFocus(juce::Component& root)
+void disableChildFocus(juce::Component& root)
 {
-    if (auto* button = dynamic_cast<juce::Button*>(&root))
-        button->setWantsKeyboardFocus(false);
     for (auto* child : root.getChildren())
-        if (child != nullptr)
-            disableButtonFocus(*child);
+    {
+        if (child == nullptr)
+            continue;
+        child->setWantsKeyboardFocus(false);
+        disableChildFocus(*child);
+    }
 }
 }
 
@@ -958,8 +960,8 @@ MiguelMusicAssistantAudioProcessorEditor(
     }
 
     startTimerHz(24);
-    disableButtonFocus(*this);
-    capturePad.setWantsKeyboardFocus(false);
+    disableChildFocus(*this);
+    setWantsKeyboardFocus(true);
     grabKeyboardFocus();
 }
 
@@ -1587,12 +1589,26 @@ bool MiguelMusicAssistantAudioProcessorEditor::keyPressed(
         return true;
     }
     const auto character = key.getTextCharacter();
-    if (character == 'g' || character == 'G')
+    const auto code = key.getKeyCode();
+    if (character == 'g' || character == 'G' || code == 'g' || code == 'G')
     {
         toggleCapturePad();
         return true;
     }
     return false;
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::mouseDown(
+    const juce::MouseEvent& event)
+{
+    grabKeyboardFocus();
+    juce::AudioProcessorEditor::mouseDown(event);
+}
+
+void MiguelMusicAssistantAudioProcessorEditor::visibilityChanged()
+{
+    if (isShowing())
+        grabKeyboardFocus();
 }
 
 void MiguelMusicAssistantAudioProcessorEditor::toggleCapturePad()

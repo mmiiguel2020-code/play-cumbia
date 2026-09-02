@@ -60,6 +60,7 @@ juce_add_plugin(MiguelMusicAssistant
     IS_SYNTH FALSE
     IS_MIDI_EFFECT FALSE
     NEEDS_MIDI_INPUT TRUE
+    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
 )
 
 target_sources(MiguelMusicAssistant PRIVATE
