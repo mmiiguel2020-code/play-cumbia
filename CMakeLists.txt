@@ -5,6 +5,12 @@ project(MiguelMusicAssistant VERSION 1.0.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(BAJXTER_BUILD_APP "Compilar Bajxterbeta (app y VST3)" ON)
+option(BAJXTER_BUILD_FX "Compilar plugins de efectos" ON)
+
+set(JUCE_BUILD_EXTRAS OFF CACHE BOOL "" FORCE)
+set(JUCE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+
 include(FetchContent)
 FetchContent_Declare(
     JUCE
@@ -15,6 +21,14 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(JUCE)
 
 set(BAJXTER_VST3_DIR "$ENV{USERPROFILE}/Documents/Miguel Music Assistant/VST3")
+set(BAJXTER_SHARED_SOURCES
+    Source/Shared/FxRack.cpp
+    Source/Shared/FxRack.h
+    Source/Shared/MiguelLookAndFeel.cpp
+    Source/Shared/MiguelLookAndFeel.h
+    Source/Shared/PrecisionRotarySlider.cpp
+    Source/Shared/PrecisionRotarySlider.h
+)
 
 function(bajxter_link target_name)
     if(MSVC)
@@ -22,6 +36,8 @@ function(bajxter_link target_name)
     endif()
     target_include_directories(${target_name} PRIVATE
         "${CMAKE_SOURCE_DIR}/Source"
+        "${CMAKE_SOURCE_DIR}/Source/App"
+        "${CMAKE_SOURCE_DIR}/Source/Shared"
         "${CMAKE_SOURCE_DIR}/Source/Modules")
     target_compile_definitions(${target_name} PUBLIC
         JUCE_DISPLAY_SPLASH_SCREEN=0
@@ -50,51 +66,47 @@ function(bajxter_copy_vst3 target_name)
         COMMENT "Copiando VST3 a Documentos/Miguel Music Assistant/VST3")
 endfunction()
 
-juce_add_plugin(MiguelMusicAssistant
-    COMPANY_NAME "Miguel Audio"
-    BUNDLE_ID "com.miguelaudio.musicassistant"
-    PLUGIN_MANUFACTURER_CODE MgAu
-    PLUGIN_CODE MmAs
-    FORMATS Standalone VST3
-    PRODUCT_NAME "Bajxterbeta"
-    IS_SYNTH FALSE
-    IS_MIDI_EFFECT FALSE
-    NEEDS_MIDI_INPUT TRUE
-    EDITOR_WANTS_KEYBOARD_FOCUS TRUE
-)
-
-target_sources(MiguelMusicAssistant PRIVATE
-    Source/FxRack.cpp
-    Source/FxRack.h
-    Source/GraphicEqDisplay.cpp
-    Source/GraphicEqDisplay.h
-    Source/GrooveEngine.cpp
-    Source/GrooveEngine.h
-    Source/ImportedSampleList.cpp
-    Source/ImportedSampleList.h
-    Source/MiguelLookAndFeel.cpp
-    Source/MiguelLookAndFeel.h
-    Source/MixAnalyzerComponent.cpp
-    Source/MixAnalyzerComponent.h
-    Source/MusicGenerator.cpp
-    Source/MusicGenerator.h
-    Source/PianoRollView.cpp
-    Source/PianoRollView.h
-    Source/PluginEditor.cpp
-    Source/PluginEditor.h
-    Source/PluginProcessor.cpp
-    Source/PluginProcessor.h
-    Source/PrecisionRotarySlider.cpp
-    Source/PrecisionRotarySlider.h
-    Source/RackPanel.cpp
-    Source/RackPanel.h
-    Source/SessionState.cpp
-    Source/SessionState.h
-    Source/SectionEq.cpp
-    Source/SectionEq.h
-)
-bajxter_link(MiguelMusicAssistant)
-bajxter_copy_vst3(MiguelMusicAssistant)
+if(BAJXTER_BUILD_APP)
+    juce_add_plugin(MiguelMusicAssistant
+        COMPANY_NAME "Miguel Audio"
+        BUNDLE_ID "com.miguelaudio.musicassistant"
+        PLUGIN_MANUFACTURER_CODE MgAu
+        PLUGIN_CODE MmAs
+        FORMATS Standalone VST3
+        PRODUCT_NAME "Bajxterbeta"
+        IS_SYNTH FALSE
+        IS_MIDI_EFFECT FALSE
+        NEEDS_MIDI_INPUT TRUE
+        EDITOR_WANTS_KEYBOARD_FOCUS TRUE
+    )
+    target_sources(MiguelMusicAssistant PRIVATE
+        ${BAJXTER_SHARED_SOURCES}
+        Source/App/GraphicEqDisplay.cpp
+        Source/App/GraphicEqDisplay.h
+        Source/App/GrooveEngine.cpp
+        Source/App/GrooveEngine.h
+        Source/App/ImportedSampleList.cpp
+        Source/App/ImportedSampleList.h
+        Source/App/MixAnalyzerComponent.cpp
+        Source/App/MixAnalyzerComponent.h
+        Source/App/MusicGenerator.cpp
+        Source/App/MusicGenerator.h
+        Source/App/PianoRollView.cpp
+        Source/App/PianoRollView.h
+        Source/App/PluginEditor.cpp
+        Source/App/PluginEditor.h
+        Source/App/PluginProcessor.cpp
+        Source/App/PluginProcessor.h
+        Source/App/RackPanel.cpp
+        Source/App/RackPanel.h
+        Source/App/SessionState.cpp
+        Source/App/SessionState.h
+        Source/App/SectionEq.cpp
+        Source/App/SectionEq.h
+    )
+    bajxter_link(MiguelMusicAssistant)
+    bajxter_copy_vst3(MiguelMusicAssistant)
+endif()
 
 function(bajxter_fx target_name product code slot_index)
     juce_add_plugin(${target_name}
@@ -111,12 +123,7 @@ function(bajxter_fx target_name product code slot_index)
         VST3_CATEGORIES Fx
     )
     target_sources(${target_name} PRIVATE
-        Source/FxRack.cpp
-        Source/FxRack.h
-        Source/MiguelLookAndFeel.cpp
-        Source/MiguelLookAndFeel.h
-        Source/PrecisionRotarySlider.cpp
-        Source/PrecisionRotarySlider.h
+        ${BAJXTER_SHARED_SOURCES}
         Source/Modules/BajxterFxProcessor.cpp
         Source/Modules/BajxterFxProcessor.h
         Source/Modules/BajxterFxEditor.cpp
@@ -127,61 +134,63 @@ function(bajxter_fx target_name product code slot_index)
     bajxter_copy_vst3(${target_name})
 endfunction()
 
-bajxter_fx(BajxterFxHp        "Bajxter Filtro HP"   BxHp 0)
-bajxter_fx(BajxterFxLp        "Bajxter Filtro LP"   BxLp 1)
-bajxter_fx(BajxterFxComp      "Bajxter Compresor"   BxCp 2)
-bajxter_fx(BajxterFxExciter   "Bajxter Excitador"   BxEx 3)
-bajxter_fx(BajxterFxDoubler   "Bajxter Duplicador"  BxDb 4)
-bajxter_fx(BajxterFxDist      "Bajxter Distorsion"  BxDs 5)
-bajxter_fx(BajxterFxDelay     "Bajxter Delay"       BxDl 6)
-bajxter_fx(BajxterFxEfecto    "Bajxter Efecto"      BxEf 7)
-bajxter_fx(BajxterFxVolume    "Bajxter Volumen"     BxVl 8)
-bajxter_fx(BajxterFxVelocity  "Bajxter Velocity"    BxVe 9)
+if(BAJXTER_BUILD_FX)
+    bajxter_fx(BajxterFxHp        "Bajxter Filtro HP"   BxHp 0)
+    bajxter_fx(BajxterFxLp        "Bajxter Filtro LP"   BxLp 1)
+    bajxter_fx(BajxterFxComp      "Bajxter Compresor"   BxCp 2)
+    bajxter_fx(BajxterFxExciter   "Bajxter Excitador"   BxEx 3)
+    bajxter_fx(BajxterFxDoubler   "Bajxter Duplicador"  BxDb 4)
+    bajxter_fx(BajxterFxDist      "Bajxter Distorsion"  BxDs 5)
+    bajxter_fx(BajxterFxDelay     "Bajxter Delay"       BxDl 6)
+    bajxter_fx(BajxterFxEfecto    "Bajxter Efecto"      BxEf 7)
+    bajxter_fx(BajxterFxVolume    "Bajxter Volumen"     BxVl 8)
+    bajxter_fx(BajxterFxVelocity  "Bajxter Velocity"    BxVe 9)
 
-juce_add_plugin(BajxterTuner
-    COMPANY_NAME "Miguel Audio"
-    BUNDLE_ID "com.miguelaudio.bajxtertuner"
-    PLUGIN_MANUFACTURER_CODE MgAu
-    PLUGIN_CODE BxTn
-    FORMATS VST3
-    PRODUCT_NAME "Bajxter Afinador"
-    IS_SYNTH FALSE
-    NEEDS_MIDI_INPUT FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    VST3_CATEGORIES Fx
-)
-target_sources(BajxterTuner PRIVATE
-    Source/MiguelLookAndFeel.cpp
-    Source/MiguelLookAndFeel.h
-    Source/Modules/BajxterTunerProcessor.cpp
-    Source/Modules/BajxterTunerProcessor.h
-    Source/Modules/BajxterTunerEditor.cpp
-    Source/Modules/BajxterTunerEditor.h
-)
-bajxter_link(BajxterTuner)
-bajxter_copy_vst3(BajxterTuner)
+    juce_add_plugin(BajxterTuner
+        COMPANY_NAME "Miguel Audio"
+        BUNDLE_ID "com.miguelaudio.bajxtertuner"
+        PLUGIN_MANUFACTURER_CODE MgAu
+        PLUGIN_CODE BxTn
+        FORMATS VST3
+        PRODUCT_NAME "Bajxter Afinador"
+        IS_SYNTH FALSE
+        NEEDS_MIDI_INPUT FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        VST3_CATEGORIES Fx
+    )
+    target_sources(BajxterTuner PRIVATE
+        Source/Shared/MiguelLookAndFeel.cpp
+        Source/Shared/MiguelLookAndFeel.h
+        Source/Modules/BajxterTunerProcessor.cpp
+        Source/Modules/BajxterTunerProcessor.h
+        Source/Modules/BajxterTunerEditor.cpp
+        Source/Modules/BajxterTunerEditor.h
+    )
+    bajxter_link(BajxterTuner)
+    bajxter_copy_vst3(BajxterTuner)
 
-juce_add_plugin(BajxterEq
-    COMPANY_NAME "Miguel Audio"
-    BUNDLE_ID "com.miguelaudio.bajxtereq"
-    PLUGIN_MANUFACTURER_CODE MgAu
-    PLUGIN_CODE BxEq
-    FORMATS VST3
-    PRODUCT_NAME "Bajxter EQ"
-    IS_SYNTH FALSE
-    NEEDS_MIDI_INPUT FALSE
-    EDITOR_WANTS_KEYBOARD_FOCUS FALSE
-    VST3_CATEGORIES Fx
-)
-target_sources(BajxterEq PRIVATE
-    Source/MiguelLookAndFeel.cpp
-    Source/MiguelLookAndFeel.h
-    Source/PrecisionRotarySlider.cpp
-    Source/PrecisionRotarySlider.h
-    Source/Modules/BajxterEqProcessor.cpp
-    Source/Modules/BajxterEqProcessor.h
-    Source/Modules/BajxterEqEditor.cpp
-    Source/Modules/BajxterEqEditor.h
-)
-bajxter_link(BajxterEq)
-bajxter_copy_vst3(BajxterEq)
+    juce_add_plugin(BajxterEq
+        COMPANY_NAME "Miguel Audio"
+        BUNDLE_ID "com.miguelaudio.bajxtereq"
+        PLUGIN_MANUFACTURER_CODE MgAu
+        PLUGIN_CODE BxEq
+        FORMATS VST3
+        PRODUCT_NAME "Bajxter EQ"
+        IS_SYNTH FALSE
+        NEEDS_MIDI_INPUT FALSE
+        EDITOR_WANTS_KEYBOARD_FOCUS FALSE
+        VST3_CATEGORIES Fx
+    )
+    target_sources(BajxterEq PRIVATE
+        Source/Shared/MiguelLookAndFeel.cpp
+        Source/Shared/MiguelLookAndFeel.h
+        Source/Shared/PrecisionRotarySlider.cpp
+        Source/Shared/PrecisionRotarySlider.h
+        Source/Modules/BajxterEqProcessor.cpp
+        Source/Modules/BajxterEqProcessor.h
+        Source/Modules/BajxterEqEditor.cpp
+        Source/Modules/BajxterEqEditor.h
+    )
+    bajxter_link(BajxterEq)
+    bajxter_copy_vst3(BajxterEq)
+endif()
