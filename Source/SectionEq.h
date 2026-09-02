@@ -22,6 +22,7 @@ public:
 
     void prepare(double sampleRate);
     void process(juce::AudioBuffer<float>& buffer);
+    bool isBypassed() const;
     void setBandGain(bool outputStage, int band, float decibels);
     float getBandGain(bool outputStage, int band) const;
     void setVolume(float gain);

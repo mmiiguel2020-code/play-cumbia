@@ -131,12 +131,15 @@ namespace SessionState
 {
 juce::ValueTree buildFromEngines(const GrooveEngine& groove,
                                  const SectionEqBank& eqBank,
-                                 const juce::ValueTree& uiState)
+                                 const juce::ValueTree& uiState,
+                                 const juce::ValueTree& fxState)
 {
     juce::ValueTree session(rootType);
     session.setProperty(versionProperty, currentVersion, nullptr);
     session.appendChild(saveGrooveState(groove), nullptr);
     session.appendChild(saveEqBank(eqBank), nullptr);
+    if (fxState.isValid())
+        session.appendChild(fxState.createCopy(), nullptr);
     if (uiState.isValid())
         session.appendChild(uiState.createCopy(), nullptr);
     return session;

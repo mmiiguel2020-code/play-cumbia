@@ -65,6 +65,24 @@ juce::StringArray ImportedSampleList::getFilePaths() const
     return paths;
 }
 
+void ImportedSampleList::addOrReplaceLast(const juce::File& file)
+{
+    if (!isSupportedAudioFile(file))
+        return;
+    if (samples.size() >= maxSamples)
+        samples.set(samples.size() - 1, file);
+    else
+        samples.add(file);
+    list.updateContent();
+    list.selectRow(samples.size() - 1);
+    list.scrollToEnsureRowIsOnscreen(samples.size() - 1);
+    if (onSampleCountChanged)
+        onSampleCountChanged(samples.size());
+    if (onSelectionChanged)
+        onSelectionChanged(samples.getReference(samples.size() - 1));
+    repaint();
+}
+
 void ImportedSampleList::removeSelected()
 {
     removeRow(list.getSelectedRow());

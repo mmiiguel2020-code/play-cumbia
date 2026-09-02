@@ -1,5 +1,7 @@
 #include "GrooveEngine.h"
 
+#include <algorithm>
+
 namespace
 {
 std::shared_ptr<LoadedAudioSample> loadAudioFile(const juce::File& file)
@@ -140,11 +142,11 @@ void GrooveEngine::renderVoiceBlock(
 
     const auto outChannels = output.getNumChannels();
     if (outChannels > 0)
-        output.addFrom(0, frameOffset, scratchL, 0, numSamples);
+        output.addFrom(0, frameOffset, scratchL, numSamples);
     if (outChannels > 1)
-        output.addFrom(1, frameOffset, scratchR, 0, numSamples);
+        output.addFrom(1, frameOffset, scratchR, numSamples);
     else if (outChannels > 0)
-        output.addFrom(0, frameOffset, scratchR, 0, numSamples);
+        output.addFrom(0, frameOffset, scratchR, numSamples);
 }
 
 void GrooveEngine::process(juce::AudioBuffer<float>& output)
@@ -499,6 +501,10 @@ void BroncoPianoEngine::process(juce::AudioBuffer<float>& output)
 {
     const juce::ScopedTryLock scoped(lock);
     if (!scoped.isLocked())
+        return;
+    if (!playback.load()
+        && std::none_of(voices.begin(), voices.end(),
+                        [](const Voice& voice) { return voice.active; }))
         return;
 
     const auto numSamples = output.getNumSamples();

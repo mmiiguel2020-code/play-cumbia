@@ -13,7 +13,9 @@ public:
     void addFiles(const juce::StringArray& paths);
     void setFilesFromPaths(const juce::StringArray& paths);
     juce::StringArray getFilePaths() const;
+    void addOrReplaceLast(const juce::File& file);
     void removeSelected();
+    static constexpr int maxSamples = 32;
     juce::File getSelectedFile() const;
     int getNumSamples() const noexcept { return samples.size(); }
 

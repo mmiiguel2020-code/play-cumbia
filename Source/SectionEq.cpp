@@ -1,5 +1,7 @@
 #include "SectionEq.h"
 
+#include <cmath>
+
 void SectionEq::prepare(double sampleRate)
 {
     const juce::ScopedLock scoped(lock);
@@ -40,6 +42,8 @@ void SectionEq::updateBandLocked(bool outputStage, int band)
 
 void SectionEq::process(juce::AudioBuffer<float>& buffer)
 {
+    if (isBypassed())
+        return;
     const juce::ScopedTryLock scoped(lock);
     if (!scoped.isLocked())
         return;
@@ -128,6 +132,22 @@ void SectionEq::setVolume(float gain)
 void SectionEq::setBroncoMax(float amount)
 {
     broncoMax.store(juce::jlimit(0.0f, 1.0f, amount));
+}
+
+bool SectionEq::isBypassed() const
+{
+    if (std::abs(volume.load() - 1.0f) > 0.001f)
+        return false;
+    if (broncoMax.load() > 0.001f)
+        return false;
+    const juce::ScopedLock scoped(lock);
+    for (int band = 0; band < bandCount; ++band)
+    {
+        if (std::abs(inputGains[static_cast<size_t>(band)]) > 0.01f
+            || std::abs(outputGains[static_cast<size_t>(band)]) > 0.01f)
+            return false;
+    }
+    return true;
 }
 
 void SectionEqBank::prepare(double sampleRate)

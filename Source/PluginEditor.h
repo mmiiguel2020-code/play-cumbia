@@ -8,7 +8,10 @@
 #include "PianoRollView.h"
 #include "PluginProcessor.h"
 #include "PrecisionRotarySlider.h"
+#include "RackPanel.h"
 
+#include <array>
+#include <functional>
 #include <juce_audio_utils/juce_audio_utils.h>
 
 class SampleWaveform final : public juce::Component,
@@ -70,10 +73,76 @@ private:
     juce::Colour accentColour;
 };
 
+class PluginCell final : public juce::Component
+{
+public:
+    explicit PluginCell(juce::String titleToUse,
+                        juce::Colour accent = MiguelColours::orange())
+        : title(std::move(titleToUse)), accentColour(accent)
+    {
+        setInterceptsMouseClicks(false, true);
+    }
+
+    juce::Rectangle<int> contentArea() const
+    {
+        return getLocalBounds().reduced(6, 4).withTrimmedTop(20);
+    }
+
+    void paint(juce::Graphics& g) override
+    {
+        auto bounds = getLocalBounds().toFloat().reduced(2.0f);
+        g.setColour(MiguelColours::panel());
+        g.fillRoundedRectangle(bounds, 10.0f);
+        g.setColour(accentColour.withAlpha(0.8f));
+        g.drawRoundedRectangle(bounds, 10.0f, 1.4f);
+        g.setColour(accentColour);
+        g.fillRoundedRectangle(
+            juce::Rectangle<float>(bounds.getX() + 8.0f, bounds.getY() + 5.0f,
+                                   16.0f, 3.0f), 1.5f);
+        g.setColour(MiguelColours::text());
+        g.setFont(juce::FontOptions(12.0f, juce::Font::bold));
+        g.drawText(title, juce::Rectangle<float>(
+                       bounds.getX() + 28.0f, bounds.getY() + 2.0f,
+                       bounds.getWidth() - 36.0f, 18.0f),
+                   juce::Justification::centredLeft, true);
+    }
+
+private:
+    juce::String title;
+    juce::Colour accentColour;
+};
+
+class SampleDropCard final : public juce::Component,
+                             public juce::FileDragAndDropTarget
+{
+public:
+    std::function<void(const juce::StringArray&)> onFilesDropped;
+
+    void paint(juce::Graphics&) override;
+    bool isInterestedInFileDrag(const juce::StringArray& files) override;
+    void filesDropped(const juce::StringArray& files, int, int) override;
+};
+
+class CapturePad final : public juce::Button, private juce::Timer
+{
+public:
+    CapturePad();
+    std::function<void()> onToggle;
+    void setMode(int newMode);
+    void paintButton(juce::Graphics&, bool, bool) override;
+    void clicked() override;
+
+private:
+    void timerCallback() override;
+    int mode = 0;
+    bool flash = false;
+};
+
 class MiguelMusicAssistantAudioProcessorEditor final
     : public juce::AudioProcessorEditor,
       private juce::Timer,
-      private juce::MidiKeyboardStateListener
+      private juce::MidiKeyboardStateListener,
+      private juce::KeyListener
 {
 public:
     explicit MiguelMusicAssistantAudioProcessorEditor(
@@ -82,6 +151,9 @@ public:
 
     void paint(juce::Graphics&) override;
     void resized() override;
+    void parentHierarchyChanged() override;
+    bool keyPressed(const juce::KeyPress&) override;
+    bool keyPressed(const juce::KeyPress&, juce::Component*) override;
     void syncSessionStateToProcessor();
 
 private:
@@ -92,23 +164,18 @@ private:
     void updateSelectedSample(const juce::File&);
     void analyseSelectedSamplePitch();
     void updateTunerDisplay();
-    void processTunedSample(bool exportFile);
-    void generateBajoquintoChords();
-    void previewBajoquintoChord();
-    juce::File selectedBajoquintoChord() const;
-    juce::File bajoquintoOutputFolder() const;
-    void updateBajoquintoStatus();
-    void chooseRhythmSample(int channel);
-    juce::File selectedDrumLibrary() const;
-    void exportRhythmLoop();
+    void chooseLayerSample(int slot);
+    void applyLayerFiles(int startSlot, const juce::Array<juce::File>& files);
+    void refreshLayerSlotButtons();
     void prepareBroncoPiano();
     void exportPianoRecording();
     AudioSection selectedEqSection() const;
     void updateEqControls();
     void updateFoldVisibility();
-    void refreshRhythmGridFromEngine();
     juce::ValueTree captureUiSessionState() const;
     void restoreUiSessionState(const juce::ValueTree& uiState);
+    void toggleCapturePad();
+    void toggleSampleTrigger();
     void handleNoteOn(
         juce::MidiKeyboardState*, int, int midiNote, float velocity) override;
     void handleNoteOff(
@@ -118,11 +185,11 @@ private:
     MiguelLookAndFeel miguelLookAndFeel;
 
     juce::TabbedComponent tabs{ juce::TabbedButtonBar::TabsAtTop };
+    CapturePad capturePad;
     TabPagePanel generatorPage{ MiguelColours::cyan() };
     TabPagePanel mixPage{ MiguelColours::green() };
     TabPagePanel libraryPage{ MiguelColours::orange() };
     TabPagePanel bajoquintoPage{ MiguelColours::purple() };
-    TabPagePanel studioPage{ MiguelColours::pink() };
     TabPagePanel eqPage{ MiguelColours::yellow() };
 
     juce::ComboBox keyBox;
@@ -149,12 +216,18 @@ private:
     MixAnalyzerComponent mixAnalyzer;
 
     juce::Label libraryTitle;
+    PluginCell tunerCell{ "Afinador", MiguelColours::orange() };
+    PluginCell eqCell{ "EQ", MiguelColours::cyan() };
+    PluginCell trimCell{ "Recortar", MiguelColours::pink() };
+    PluginCell fadeInCell{ "Entrada", MiguelColours::green() };
+    PluginCell fadeOutCell{ "Salida", MiguelColours::orange() };
     ImportedSampleList importedSampleList;
     juce::TextButton folderButton{ "Agregar samples..." };
     juce::TextButton removeSampleButton{ "Quitar seleccionado" };
     juce::Label folderLabel;
     SampleWaveform sampleWaveform;
     juce::TextButton samplePlayButton{ "Escuchar" };
+    juce::TextButton sampleLoopButton{ "Loop" };
     juce::TextButton sampleStopButton{ "Detener" };
     juce::TextButton sampleDragButton{ "Mostrar en Explorador" };
     juce::Label sampleInfo;
@@ -165,9 +238,18 @@ private:
     juce::Label pitchShiftLabel;
     PrecisionRotarySlider broncoMaxKnob;
     juce::Label broncoMaxLabel;
-    juce::TextButton analysePitchButton{ "Analizar tono" };
-    juce::TextButton auditionTunedButton{ "Escuchar ajustado" };
-    juce::TextButton exportTunedButton{ "Exportar afinado" };
+    juce::Label sampleEqTitle;
+    juce::Label sampleEqLowLabel;
+    juce::Label sampleEqMidLabel;
+    juce::Label sampleEqHighLabel;
+    std::array<PrecisionRotarySlider, 3> sampleEqKnobs;
+    juce::TextButton sampleEqResetButton{ "Reset EQ" };
+    PrecisionRotarySlider sampleTrimKnob;
+    juce::Label sampleTrimLabel;
+    PrecisionRotarySlider sampleFadeInKnob;
+    juce::Label sampleFadeInLabel;
+    PrecisionRotarySlider sampleFadeOutKnob;
+    juce::Label sampleFadeOutLabel;
     juce::File selectedSample;
     juce::ThreadPool pitchPool{ 1 };
     std::atomic<juce::uint64> pitchRequest{ 0 };
@@ -177,52 +259,20 @@ private:
 
     juce::Label bajoquintoTitle;
     juce::Label bajoquintoDescription;
-    juce::ComboBox bajoquintoStyleBox;
-    juce::ComboBox chordRootBox;
-    juce::ComboBox chordQualityBox;
-    juce::ComboBox chordVoicingBox;
-    juce::Label bajoquintoStyleLabel;
-    juce::Label chordRootLabel;
-    juce::Label chordQualityLabel;
-    juce::Label chordVoicingLabel;
-    juce::TextButton generateChordsButton{ "Generar 24 acordes" };
-    juce::TextButton previewChordButton{ "Escuchar acorde" };
-    juce::TextButton stopChordButton{ "Detener" };
-    juce::TextButton openToneInputButton{ "Abrir entrada WAV" };
-    juce::TextButton openChordsButton{ "Abrir carpeta" };
-    juce::Label toneInputLabel;
-    juce::Label bajoquintoStatus;
-    juce::ThreadPool chordPool{ 1 };
-    std::atomic<juce::uint64> chordRequest{ 0 };
-    juce::ChildProcess chordProcess;
-
-    juce::Label studioTitle;
-    juce::Label rhythmTitle;
-    juce::TextButton rhythmFoldButton{ "[v] Ritmos / Piano Roll" };
-    juce::Slider rhythmBpmSlider;
-    juce::Label rhythmBpmLabel;
-    juce::ComboBox loopLengthBox;
-    juce::Label loopLengthLabel;
-    juce::ComboBox exportBarsBox;
-    juce::Label exportBarsLabel;
-    juce::TextButton rhythmPlayButton{ "Play Loop" };
-    juce::TextButton rhythmStopButton{ "Stop" };
-    juce::TextButton rhythmClearButton{ "Limpiar" };
-    juce::TextButton rhythmExportButton{ "Exportar Loop" };
-    juce::ComboBox drumLibraryBox;
-    juce::Label drumLibraryLabel;
-    juce::TextButton openDrumLibraryButton{ "Abrir biblioteca" };
-    std::array<juce::TextButton, GrooveEngine::channelCount>
-        rhythmLoadButtons;
-    std::array<juce::TextButton, GrooveEngine::channelCount>
-        rhythmEqButtons;
-    std::array<juce::Label, GrooveEngine::channelCount> rhythmChannelLabels;
-    std::array<juce::Slider, GrooveEngine::channelCount> rhythmGainSliders;
-    std::array<std::array<juce::TextButton, GrooveEngine::stepCount>,
-               GrooveEngine::channelCount> rhythmSteps;
-    juce::Viewport rhythmGridViewport;
-    juce::Component rhythmGridContent;
-    int previousPlayheadStep = -1;
+    juce::TextButton layerPlayButton{ "Escuchar" };
+    juce::TextButton layerLoopButton{ "Loop" };
+    juce::TextButton layerStopButton{ "Detener" };
+    juce::Label layerStatus;
+    std::array<SampleDropCard, SampleLayerBank::slotCount> layerCards;
+    std::array<juce::Label, SampleLayerBank::slotCount> layerTitles;
+    std::array<juce::TextButton, SampleLayerBank::slotCount> layerLoadButtons;
+    std::array<PrecisionRotarySlider, SampleLayerBank::slotCount>
+        layerVolumeKnobs;
+    std::array<PrecisionRotarySlider, SampleLayerBank::slotCount>
+        layerPitchKnobs;
+    std::array<juce::Label, SampleLayerBank::slotCount> layerVolumeLabels;
+    std::array<SignalLed, SampleLayerBank::slotCount> layerMuteLeds;
+    std::array<juce::Label, SampleLayerBank::slotCount> layerPitchLabels;
 
     juce::Label pianoTitle;
     juce::TextButton pianoFoldButton{ "[v] Piano Bajo Sexto Bronco" };
@@ -257,8 +307,9 @@ private:
     PrecisionRotarySlider sectionBroncoKnob;
     juce::Label sectionBroncoLabel;
     juce::TextButton resetEqButton{ "Restablecer EQ" };
-    bool rhythmExpanded = true;
-    bool pianoExpanded = true;
+    RackPanel rackPanel;
+    juce::Component* keyListenerHost = nullptr;
+    bool pianoExpanded = false;
     bool inputEqExpanded = true;
     bool outputEqExpanded = true;
 

@@ -1,5 +1,7 @@
 #include "PluginProcessor.h"
 #include "PluginEditor.h"
+#include <cmath>
+#include <juce_audio_formats/juce_audio_formats.h>
 
 namespace
 {
@@ -82,6 +84,7 @@ MiguelMusicAssistantAudioProcessor::MiguelMusicAssistantAudioProcessor()
         .withOutput("Output", juce::AudioChannelSet::stereo(), true))
 {
     formatManager.registerBasicFormats();
+    shapedSource.setRack(&fxRack);
     for (int voice = 0; voice < 16; ++voice)
         previewSynth.addVoice(new PreviewVoice());
     previewSynth.addSound(new PreviewSound());
@@ -93,9 +96,23 @@ void MiguelMusicAssistantAudioProcessor::prepareToPlay(double sampleRate,
     activeSampleRate = sampleRate;
     previewSynth.setCurrentPlaybackSampleRate(sampleRate);
     grooveEngine.prepare(sampleRate);
+    layerBank.prepare(sampleRate);
     pianoEngine.prepare(sampleRate);
     sectionEqBank.prepare(sampleRate);
+    fxRack.prepare(sampleRate, samplesPerBlock);
     sampleTransport.prepareToPlay(samplesPerBlock, sampleRate);
+    captureBuffer.setSize(
+        juce::jmax(1, getTotalNumInputChannels()),
+        juce::jmax(1, static_cast<int>(sampleRate * 30.0)),
+        false, true, true);
+    captureWritten.store(0);
+    {
+        const juce::ScopedLock scoped(sampleEqLock);
+        updateSampleEqLocked();
+        for (auto& channelFilters : sampleEqFilters)
+            for (auto& filter : channelFilters)
+                filter.reset();
+    }
     samplePreviewBuffer.setSize(
         juce::jmax(1, getTotalNumOutputChannels()), samplesPerBlock);
     sectionBuffer.setSize(
@@ -137,99 +154,89 @@ void MiguelMusicAssistantAudioProcessor::processBlock(
     if (channels == 0 || samples == 0)
         return;
 
+    buffer.clear();
+
     if (samplePreviewBuffer.getNumChannels() < channels
         || samplePreviewBuffer.getNumSamples() < samples)
         samplePreviewBuffer.setSize(channels, samples, false, false, true);
     samplePreviewBuffer.clear();
     juce::AudioSourceChannelInfo previewInfo(&samplePreviewBuffer, 0, samples);
     sampleTransport.getNextAudioBlock(previewInfo);
+    const auto sampleEnded = shapedSource.takeReachedEnd();
+    if (sampleEnded)
+        sampleTransport.stop();
+    applySampleEq(samplePreviewBuffer);
     sectionEqBank.process(previewSection.load(), samplePreviewBuffer);
     for (int channel = 0; channel < channels; ++channel)
         buffer.addFrom(channel, 0, samplePreviewBuffer, channel, 0, samples);
 
-    addPreviewMidi(midi, samples);
-    if (sectionBuffer.getNumChannels() < channels
-        || sectionBuffer.getNumSamples() < samples)
-        sectionBuffer.setSize(channels, samples, false, false, true);
-
-    sectionBuffer.clear();
-    previewSynth.renderNextBlock(sectionBuffer, midi, 0, samples);
-    sectionEqBank.process(AudioSection::generator, sectionBuffer);
-    for (int channel = 0; channel < channels; ++channel)
-        buffer.addFrom(channel, 0, sectionBuffer, channel, 0, samples);
-
-    sectionBuffer.clear();
-    grooveEngine.process(sectionBuffer);
-    sectionEqBank.process(AudioSection::rhythms, sectionBuffer);
-    for (int channel = 0; channel < channels; ++channel)
-        buffer.addFrom(channel, 0, sectionBuffer, channel, 0, samples);
-
-    sectionBuffer.clear();
-    pianoEngine.process(sectionBuffer);
-    sectionEqBank.process(AudioSection::piano, sectionBuffer);
-    for (int channel = 0; channel < channels; ++channel)
-        buffer.addFrom(channel, 0, sectionBuffer, channel, 0, samples);
-
-    double sumSquares = 0.0;
-    double leftRight = 0.0;
-    double leftSquares = 0.0;
-    double rightSquares = 0.0;
-    float peak = 0.0f;
-    float leftPeak = 0.0f;
-    float rightPeak = 0.0f;
-
-    for (int sample = 0; sample < samples; ++sample)
+    if (midiPreviewPlaying.load())
     {
-        const auto left = buffer.getSample(0, sample);
-        const auto right = channels > 1 ? buffer.getSample(1, sample) : left;
-        sumSquares += 0.5 * (left * left + right * right);
-        leftRight += left * right;
-        leftSquares += left * left;
-        rightSquares += right * right;
-        leftPeak = juce::jmax(leftPeak, std::abs(left));
-        rightPeak = juce::jmax(rightPeak, std::abs(right));
-        peak = juce::jmax(peak, std::abs(left), std::abs(right));
+        addPreviewMidi(midi, samples);
+        if (sectionBuffer.getNumChannels() < channels
+            || sectionBuffer.getNumSamples() < samples)
+            sectionBuffer.setSize(channels, samples, false, false, true);
+        sectionBuffer.clear();
+        previewSynth.renderNextBlock(sectionBuffer, midi, 0, samples);
+        for (int channel = 0; channel < channels; ++channel)
+            buffer.addFrom(channel, 0, sectionBuffer, channel, 0, samples);
     }
 
-    const auto rms = static_cast<float>(std::sqrt(sumSquares / samples));
-    const auto denominator = std::sqrt(leftSquares * rightSquares);
-    const auto correlation = denominator > 0.0
-        ? static_cast<float>(leftRight / denominator) : 1.0f;
-
-    rmsDb.store(juce::Decibels::gainToDecibels(rms, -100.0f));
-    peakDb.store(juce::Decibels::gainToDecibels(peak, -100.0f));
-    leftRmsDb.store(juce::Decibels::gainToDecibels(
-        static_cast<float>(std::sqrt(leftSquares / samples)), -100.0f));
-    rightRmsDb.store(juce::Decibels::gainToDecibels(
-        static_cast<float>(std::sqrt(rightSquares / samples)), -100.0f));
-    leftPeakDb.store(juce::Decibels::gainToDecibels(leftPeak, -100.0f));
-    rightPeakDb.store(juce::Decibels::gainToDecibels(rightPeak, -100.0f));
-    stereoCorrelation.store(juce::jlimit(-1.0f, 1.0f, correlation));
-    if (peak >= 1.0f)
-        clipped.store(true);
-
-    int start1 = 0;
-    int size1 = 0;
-    int start2 = 0;
-    int size2 = 0;
-    analyzerFifo.prepareToWrite(
-        samples, start1, size1, start2, size2);
-    const auto copyMono = [&](int destinationStart, int count,
-                              int sourceStart)
+    if (layerBank.isPlaying())
     {
-        for (int index = 0; index < count; ++index)
-        {
-            const auto sourceIndex = sourceStart + index;
-            const auto left = buffer.getSample(0, sourceIndex);
-            const auto right = channels > 1
-                ? buffer.getSample(1, sourceIndex) : left;
-            analyzerBuffer[static_cast<size_t>(destinationStart + index)] =
-                (left + right) * 0.5f;
-        }
-    };
-    copyMono(start1, size1, 0);
-    copyMono(start2, size2, size1);
-    analyzerFifo.finishedWrite(size1 + size2);
+        if (sectionBuffer.getNumChannels() < channels
+            || sectionBuffer.getNumSamples() < samples)
+            sectionBuffer.setSize(channels, samples, false, false, true);
+        sectionBuffer.clear();
+        layerBank.process(sectionBuffer);
+        for (int channel = 0; channel < channels; ++channel)
+            buffer.addFrom(channel, 0, sectionBuffer, channel, 0, samples);
+    }
+
+    fxRack.process(buffer);
+
+    auto samplePeak = 0.0f;
+    const auto sampleCh = juce::jmin(channels, samplePreviewBuffer.getNumChannels());
+    for (int channel = 0; channel < sampleCh; ++channel)
+    {
+        auto* data = samplePreviewBuffer.getReadPointer(channel);
+        for (int i = 0; i < samples; ++i)
+            samplePeak = juce::jmax(samplePeak, std::abs(data[i]));
+    }
+
+    auto state = captureState.load();
+    if (state == 1 && samplePeak > 0.018f)
+    {
+        captureWritten.store(0);
+        captureStopRequest.store(false);
+        captureHeardSample.store(true);
+        captureState.store(2);
+        state = 2;
+    }
+    if (state == 2)
+    {
+        if (samplePeak > 0.018f)
+            captureHeardSample.store(true);
+        if (captureBuffer.getNumSamples() < static_cast<int>(activeSampleRate * 30.0)
+            || captureBuffer.getNumChannels() < juce::jmax(1, sampleCh))
+            captureBuffer.setSize(
+                juce::jmax(1, sampleCh),
+                juce::jmax(samples, static_cast<int>(activeSampleRate * 30.0)),
+                false, true, true);
+        const juce::ScopedLock sl(captureLock);
+        const auto room = captureBuffer.getNumSamples() - captureWritten.load();
+        const auto toCopy = juce::jmin(samples, juce::jmax(0, room));
+        const auto destCh = juce::jmin(sampleCh, captureBuffer.getNumChannels());
+        const auto start = captureWritten.load();
+        for (int channel = 0; channel < destCh; ++channel)
+            captureBuffer.copyFrom(
+                channel, start, samplePreviewBuffer, channel, 0, toCopy);
+        captureWritten.store(start + toCopy);
+        if (captureStopRequest.load() || toCopy < samples
+            || start + toCopy >= captureBuffer.getNumSamples()
+            || (sampleEnded && captureHeardSample.load()))
+            captureState.store(3);
+    }
 }
 
 int MiguelMusicAssistantAudioProcessor::popAnalyzerSamples(
@@ -250,6 +257,288 @@ int MiguelMusicAssistantAudioProcessor::popAnalyzerSamples(
     return size1 + size2;
 }
 
+void ShapedSampleSource::setBuffer(juce::AudioBuffer<float> newBuffer,
+                                   double nativeRate)
+{
+    buffer = std::move(newBuffer);
+    sourceRate = nativeRate > 0.0 ? nativeRate : 44100.0;
+    position = 0.0;
+    reachedEnd.store(false);
+}
+
+void ShapedSampleSource::setNextReadPosition(juce::int64 newPosition)
+{
+    position = static_cast<double>(juce::jmax<juce::int64>(0, newPosition));
+}
+
+juce::int64 ShapedSampleSource::getNextReadPosition() const
+{
+    return static_cast<juce::int64>(position);
+}
+
+juce::int64 ShapedSampleSource::getTotalLength() const
+{
+    return buffer.getNumSamples();
+}
+
+void ShapedSampleSource::getNextAudioBlock(
+    const juce::AudioSourceChannelInfo& info)
+{
+    info.clearActiveBufferRegion();
+    const auto total = buffer.getNumSamples();
+    if (total <= 1 || info.buffer == nullptr || info.numSamples <= 0)
+        return;
+
+    const auto gain = (rack != nullptr && !rack->isMuted(FxSlot::velocity))
+        ? rack->velocityGain()
+        : 1.0f;
+    const auto increment = juce::jlimit(0.25, 4.0, pitchRatio.load());
+    const auto srcCh = buffer.getNumChannels();
+    const auto dstCh = info.buffer->getNumChannels();
+    const auto span = static_cast<double>(juce::jmax(1, total - 1));
+    const auto endPos = span * static_cast<double>(trimEnd.load());
+    const auto fadeInLen = endPos * static_cast<double>(fadeIn.load()) * 0.5;
+    const auto fadeOutLen = endPos * static_cast<double>(fadeOut.load()) * 0.5;
+    auto pos = position;
+    auto stillPlaying = false;
+
+    for (int i = 0; i < info.numSamples; ++i)
+    {
+        if (pos >= endPos)
+        {
+            if (!looping)
+                break;
+            pos = std::fmod(pos, juce::jmax(1.0, endPos));
+        }
+        stillPlaying = true;
+        const auto i0 = juce::jlimit(0, total - 2, static_cast<int>(pos));
+        const auto frac = static_cast<float>(pos - static_cast<double>(i0));
+        auto env = 1.0f;
+        if (fadeInLen > 1.0 && pos < fadeInLen)
+            env *= static_cast<float>(pos / fadeInLen);
+        if (fadeOutLen > 1.0 && pos > endPos - fadeOutLen)
+            env *= static_cast<float>((endPos - pos) / fadeOutLen);
+        for (int ch = 0; ch < dstCh; ++ch)
+        {
+            const auto src = juce::jmin(ch, srcCh - 1);
+            const auto a = buffer.getSample(src, i0);
+            const auto b = buffer.getSample(src, i0 + 1);
+            info.buffer->setSample(ch, info.startSample + i,
+                                   (a + (b - a) * frac) * gain * env);
+        }
+        pos += increment;
+    }
+    position = pos;
+    if (!looping && !stillPlaying)
+        reachedEnd.store(true);
+}
+
+void SampleLayerBank::prepare(double sampleRate)
+{
+    hostSampleRate = juce::jmax(8000.0, sampleRate);
+}
+
+bool SampleLayerBank::loadSlot(int slot, const juce::File& file,
+                               juce::AudioFormatManager& formats)
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount) || !file.existsAsFile())
+        return false;
+
+    auto* reader = formats.createReaderFor(file);
+    if (reader == nullptr)
+        return false;
+
+    const auto length = static_cast<int>(reader->lengthInSamples);
+    juce::AudioBuffer<float> loaded(
+        juce::jmax(1, static_cast<int>(reader->numChannels)),
+        juce::jmax(1, length));
+    reader->read(&loaded, 0, loaded.getNumSamples(), 0, true, true);
+    const auto nativeRate = reader->sampleRate;
+    delete reader;
+
+    const juce::ScopedLock sl(lock);
+    auto& target = slots[static_cast<size_t>(slot)];
+    target.audio = std::move(loaded);
+    target.sourceRate = nativeRate > 0.0 ? nativeRate : 44100.0;
+    target.path = file.getFullPathName();
+    target.name = file.getFileName();
+    target.position = 0.0;
+    target.loaded.store(true);
+    return true;
+}
+
+void SampleLayerBank::start()
+{
+    const juce::ScopedLock sl(lock);
+    auto any = false;
+    for (auto& slot : slots)
+    {
+        slot.position = 0.0;
+        if (slot.loaded.load() && slot.audio.getNumSamples() > 1)
+            any = true;
+    }
+    playing.store(any);
+}
+
+void SampleLayerBank::stop()
+{
+    playing.store(false);
+    const juce::ScopedLock sl(lock);
+    for (auto& slot : slots)
+    {
+        slot.position = 0.0;
+        slot.led.store(0.0f);
+    }
+}
+
+void SampleLayerBank::process(juce::AudioBuffer<float>& output)
+{
+    if (!playing.load())
+        return;
+
+    const juce::ScopedLock sl(lock);
+    const auto host = hostSampleRate > 0.0 ? hostSampleRate : 44100.0;
+    const auto numSamples = output.getNumSamples();
+    const auto outCh = output.getNumChannels();
+    const auto loop = looping.load();
+    auto anyVoice = false;
+
+    for (auto& slot : slots)
+    {
+        if (!slot.loaded.load() || slot.audio.getNumSamples() < 2)
+            continue;
+
+        const auto length = slot.audio.getNumSamples();
+        const auto srcCh = slot.audio.getNumChannels();
+        const auto ratio = std::pow(2.0, slot.pitchSemitones.load() / 12.0);
+        const auto increment = juce::jlimit(
+            0.05, 8.0, (slot.sourceRate / host) * ratio);
+        const auto gain = slot.muted.load()
+            ? 0.0f
+            : juce::jlimit(0.0f, 1.5f, slot.volume.load());
+        auto pos = slot.position;
+        auto alive = true;
+        auto peak = 0.0f;
+
+        for (int i = 0; i < numSamples; ++i)
+        {
+            if (pos >= static_cast<double>(length - 1))
+            {
+                if (loop)
+                    pos = std::fmod(pos, static_cast<double>(juce::jmax(1, length - 1)));
+                else
+                {
+                    alive = false;
+                    break;
+                }
+            }
+
+            const auto i0 = juce::jlimit(0, length - 2, static_cast<int>(pos));
+            const auto frac = static_cast<float>(pos - static_cast<double>(i0));
+            for (int ch = 0; ch < outCh; ++ch)
+            {
+                const auto src = juce::jmin(ch, srcCh - 1);
+                const auto a = slot.audio.getSample(src, i0);
+                const auto b = slot.audio.getSample(src, i0 + 1);
+                const auto value = (a + (b - a) * frac) * gain;
+                peak = juce::jmax(peak, std::abs(value));
+                if (gain > 0.0f)
+                    output.addSample(ch, i, value);
+            }
+            pos += increment;
+        }
+
+        slot.position = pos;
+        slot.led.store(juce::jmax(slot.led.load() * 0.72f, juce::jmin(1.0f, peak * 1.8f)));
+        if (alive || loop)
+            anyVoice = true;
+    }
+
+    if (!anyVoice)
+        playing.store(false);
+}
+
+void SampleLayerBank::setVolume(int slot, float volume)
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return;
+    slots[static_cast<size_t>(slot)].volume.store(
+        juce::jlimit(0.0f, 1.5f, volume));
+}
+
+void SampleLayerBank::setMuted(int slot, bool shouldMute)
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return;
+    slots[static_cast<size_t>(slot)].muted.store(shouldMute);
+}
+
+bool SampleLayerBank::isMuted(int slot) const
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return false;
+    return slots[static_cast<size_t>(slot)].muted.load();
+}
+
+float SampleLayerBank::getLed(int slot) const
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return 0.0f;
+    const auto& target = slots[static_cast<size_t>(slot)];
+    return target.muted.load() ? 1.0f : target.led.load();
+}
+
+void SampleLayerBank::setPitchSemitones(int slot, double semitones)
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return;
+    slots[static_cast<size_t>(slot)].pitchSemitones.store(
+        juce::jlimit(-12.0, 12.0, semitones));
+}
+
+void SampleLayerBank::setLooping(bool shouldLoop)
+{
+    looping.store(shouldLoop);
+}
+
+bool SampleLayerBank::hasSample(int slot) const
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return false;
+    return slots[static_cast<size_t>(slot)].loaded.load();
+}
+
+juce::String SampleLayerBank::getSlotName(int slot) const
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return {};
+    const juce::ScopedLock sl(lock);
+    const auto& name = slots[static_cast<size_t>(slot)].name;
+    return name.isNotEmpty() ? name : "Cargar sample";
+}
+
+juce::String SampleLayerBank::getSlotPath(int slot) const
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return {};
+    const juce::ScopedLock sl(lock);
+    return slots[static_cast<size_t>(slot)].path;
+}
+
+float SampleLayerBank::getVolume(int slot) const
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return 0.0f;
+    return slots[static_cast<size_t>(slot)].volume.load();
+}
+
+double SampleLayerBank::getPitchSemitones(int slot) const
+{
+    if (!juce::isPositiveAndBelow(slot, slotCount))
+        return 0.0;
+    return slots[static_cast<size_t>(slot)].pitchSemitones.load();
+}
+
 bool MiguelMusicAssistantAudioProcessor::loadSample(
     const juce::File& file, AudioSection section)
 {
@@ -257,28 +546,229 @@ bool MiguelMusicAssistantAudioProcessor::loadSample(
     if (reader == nullptr)
         return false;
 
+    const auto length = static_cast<int>(reader->lengthInSamples);
+    juce::AudioBuffer<float> loaded(
+        juce::jmax(1, static_cast<int>(reader->numChannels)),
+        juce::jmax(1, length));
+    reader->read(&loaded, 0, loaded.getNumSamples(), 0, true, true);
+    const auto nativeRate = reader->sampleRate;
+    delete reader;
+
     sampleTransport.stop();
     sampleTransport.setSource(nullptr);
     sampleReader.reset();
-    sampleReader = std::make_unique<juce::AudioFormatReaderSource>(reader, true);
-    sampleTransport.setSource(sampleReader.get(), 0, nullptr,
-                              reader->sampleRate);
+    shapedSource.setBuffer(std::move(loaded), nativeRate);
+    sampleTransport.setSource(&shapedSource, 0, nullptr, nativeRate);
+    sampleTransport.setLooping(shapedSource.isLooping());
     previewSection.store(section);
     return true;
 }
 
+bool MiguelMusicAssistantAudioProcessor::loadLayerSample(
+    int slot, const juce::File& file)
+{
+    return layerBank.loadSlot(slot, file, formatManager);
+}
+
 void MiguelMusicAssistantAudioProcessor::playSample()
 {
-    if (sampleReader == nullptr)
+    if (shapedSource.getTotalLength() <= 0)
         return;
+    sampleTransport.setLooping(shapedSource.isLooping());
     sampleTransport.setPosition(0.0);
     sampleTransport.start();
+}
+
+void MiguelMusicAssistantAudioProcessor::stopSamplePlayback()
+{
+    sampleTransport.stop();
+    sampleTransport.setPosition(0.0);
+}
+
+void MiguelMusicAssistantAudioProcessor::toggleSamplePlayback()
+{
+    if (sampleTransport.isPlaying())
+        stopSamplePlayback();
+    else
+        playSample();
+}
+
+void MiguelMusicAssistantAudioProcessor::toggleCapture()
+{
+    const auto now = juce::Time::getMillisecondCounterHiRes();
+    const auto state = captureState.load();
+    if (state == 2)
+    {
+        captureStopRequest.store(true);
+        lastCapturePressMs = now;
+        return;
+    }
+
+    if (state == 1 && (now - lastCapturePressMs) < 500.0)
+    {
+        captureWritten.store(0);
+        captureStopRequest.store(false);
+        captureHeardSample.store(false);
+        captureState.store(2);
+        lastCapturePressMs = now;
+        return;
+    }
+
+    if (state == 1)
+    {
+        captureState.store(0);
+        lastCapturePressMs = now;
+        return;
+    }
+
+    captureWritten.store(0);
+    captureStopRequest.store(false);
+    captureHeardSample.store(false);
+    captureState.store(1);
+    lastCapturePressMs = now;
+}
+
+bool MiguelMusicAssistantAudioProcessor::takeCompletedCapture(juce::File& fileOut)
+{
+    if (captureState.load() != 3)
+        return false;
+
+    juce::AudioBuffer<float> copy;
+    int frames = 0;
+    {
+        const juce::ScopedLock sl(captureLock);
+        frames = captureWritten.load();
+        if (frames < 256)
+        {
+            captureState.store(0);
+            return false;
+        }
+        copy.setSize(captureBuffer.getNumChannels(), frames);
+        for (int ch = 0; ch < copy.getNumChannels(); ++ch)
+            copy.copyFrom(ch, 0, captureBuffer, ch, 0, frames);
+        captureState.store(0);
+        captureWritten.store(0);
+    }
+
+    auto folder = juce::File::getSpecialLocation(
+        juce::File::userDocumentsDirectory)
+        .getChildFile("Miguel Music Assistant")
+        .getChildFile("Grabaciones");
+    folder.createDirectory();
+    const auto destination = folder.getNonexistentChildFile(
+        "Grabacion_" + juce::Time::getCurrentTime().formatted("%Y%m%d_%H%M%S"),
+        ".wav", false);
+    std::unique_ptr<juce::OutputStream> stream =
+        destination.createOutputStream();
+    if (stream == nullptr)
+        return false;
+
+    juce::WavAudioFormat wav;
+    const auto options = juce::AudioFormatWriterOptions{}
+        .withSampleRate(activeSampleRate)
+        .withNumChannels(copy.getNumChannels())
+        .withBitsPerSample(24);
+    auto writer = wav.createWriterFor(stream, options);
+    if (writer == nullptr
+        || !writer->writeFromAudioSampleBuffer(copy, 0, frames))
+        return false;
+
+    fileOut = destination;
+    return true;
+}
+
+void MiguelMusicAssistantAudioProcessor::setSampleLooping(bool shouldLoop)
+{
+    shapedSource.setLooping(shouldLoop);
+    sampleTransport.setLooping(shouldLoop);
+}
+
+void MiguelMusicAssistantAudioProcessor::setSamplePitchSemitones(
+    double semitones)
+{
+    shapedSource.setPitchRatio(std::pow(2.0, semitones / 12.0));
+}
+
+void MiguelMusicAssistantAudioProcessor::setSampleTrim(float amount01)
+{
+    shapedSource.setTrimEnd(amount01);
+}
+
+void MiguelMusicAssistantAudioProcessor::setSampleFadeIn(float amount01)
+{
+    shapedSource.setFadeIn(amount01);
+}
+
+void MiguelMusicAssistantAudioProcessor::setSampleFadeOut(float amount01)
+{
+    shapedSource.setFadeOut(amount01);
+}
+
+void MiguelMusicAssistantAudioProcessor::updateSampleEqLocked()
+{
+    const std::array<juce::IIRCoefficients, sampleEqBandCount> coefficients{
+        juce::IIRCoefficients::makeLowShelf(
+            activeSampleRate, 140.0, 0.707,
+            juce::Decibels::decibelsToGain(sampleEqGains[0])),
+        juce::IIRCoefficients::makePeakFilter(
+            activeSampleRate, 1000.0, 0.9,
+            juce::Decibels::decibelsToGain(sampleEqGains[1])),
+        juce::IIRCoefficients::makeHighShelf(
+            activeSampleRate, 7000.0, 0.707,
+            juce::Decibels::decibelsToGain(sampleEqGains[2]))
+    };
+    for (auto& channelFilters : sampleEqFilters)
+        for (int band = 0; band < sampleEqBandCount; ++band)
+            channelFilters[static_cast<size_t>(band)].setCoefficients(
+                coefficients[static_cast<size_t>(band)]);
+}
+
+void MiguelMusicAssistantAudioProcessor::setSampleEqGain(int band,
+                                                          float decibels)
+{
+    if (!juce::isPositiveAndBelow(band, sampleEqBandCount))
+        return;
+    const juce::ScopedLock scoped(sampleEqLock);
+    sampleEqGains[static_cast<size_t>(band)] =
+        juce::jlimit(-18.0f, 18.0f, decibels);
+    updateSampleEqLocked();
+}
+
+float MiguelMusicAssistantAudioProcessor::getSampleEqGain(int band) const
+{
+    if (!juce::isPositiveAndBelow(band, sampleEqBandCount))
+        return 0.0f;
+    const juce::ScopedLock scoped(sampleEqLock);
+    return sampleEqGains[static_cast<size_t>(band)];
+}
+
+void MiguelMusicAssistantAudioProcessor::applySampleEq(
+    juce::AudioBuffer<float>& buffer)
+{
+    const juce::ScopedTryLock scoped(sampleEqLock);
+    if (!scoped.isLocked())
+        return;
+    if (std::abs(sampleEqGains[0]) < 0.01f
+        && std::abs(sampleEqGains[1]) < 0.01f
+        && std::abs(sampleEqGains[2]) < 0.01f)
+        return;
+    if (!scoped.isLocked())
+        return;
+    const auto channels = juce::jmin(2, buffer.getNumChannels());
+    const auto numSamples = buffer.getNumSamples();
+    for (int channel = 0; channel < channels; ++channel)
+    {
+        auto* data = buffer.getWritePointer(channel);
+        for (auto& filter : sampleEqFilters[static_cast<size_t>(channel)])
+            filter.processSamples(data, numSamples);
+    }
 }
 
 void MiguelMusicAssistantAudioProcessor::stopPreviews()
 {
     sampleTransport.stop();
     sampleTransport.setPosition(0.0);
+    layerBank.stop();
     const juce::ScopedLock lock(previewLock);
     midiPreviewPlaying.store(false);
     midiPreviewProgress.store(0.0);
@@ -404,13 +894,14 @@ juce::ValueTree MiguelMusicAssistantAudioProcessor::buildFullSessionState() cons
         uiCopy = uiSessionState.createCopy();
     }
     return SessionState::buildFromEngines(
-        grooveEngine, sectionEqBank, uiCopy);
+        grooveEngine, sectionEqBank, uiCopy, fxRack.toTree());
 }
 
 void MiguelMusicAssistantAudioProcessor::restoreFullSessionState(
     const juce::ValueTree& session)
 {
     SessionState::applyToEngines(session, grooveEngine, sectionEqBank);
+    fxRack.fromTree(session.getChildWithName("FxRack"));
     const auto ui = session.getChildWithName("UiSession");
     if (ui.isValid())
         setUiSessionState(ui);

@@ -6,6 +6,7 @@ class PrecisionRotarySlider final : public juce::Slider
 {
 public:
     PrecisionRotarySlider();
+    void setHuge(bool huge);
 
 private:
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(PrecisionRotarySlider)
