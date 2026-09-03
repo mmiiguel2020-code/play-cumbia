@@ -62,10 +62,9 @@ Solo el target que cambiaste.
 
 ## Guardado (audio)
 
-El REC escribe en `Documents\Miguel Music Assistant\Grabaciones`.  
-La carpeta `Escritorio\grabaciones pichadaw` es tuya a mano; el codigo aun no graba ahi solo.
+El REC escribe en `Escritorio\grabaciones pichadaw` (`Grabacion_FECHA_HORA.wav`) y entra en la lista (fila vacía, no pisa). No carga toda la carpeta al abrir.
 
-Autosave: `%APPDATA%\Miguel Music Assistant\Sessions\autosave.mmas`
+Autosave de sesión: `%APPDATA%\Miguel Music Assistant\Sessions\autosave.mmas`
 
 ## Accesos
 

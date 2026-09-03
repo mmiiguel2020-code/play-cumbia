@@ -21,10 +21,9 @@ VST3 reconocido como Synth, unico en Generators, tambien funciona como efecto.
 
 ## Git
 
-Comprobar `git log -1`. El REC sigue yendo a `Documents\Miguel Music Assistant\Grabaciones`.
+Comprobar `git log -1`. El REC va a `Escritorio\grabaciones pichadaw` y a la lista.
 
 ## Siguiente, si Miguel pide
 
-1. REC/sesion solo en `Escritorio\grabaciones pichadaw` + lista
-2. No enganchar `Vst3HostSlot` / `PichaBronco` sin que lo pida
-3. UI vieja (generador, Bronco 37) solo si lo pide
+1. No enganchar `Vst3HostSlot` / `PichaBronco` sin que lo pida
+2. UI vieja (generador, Bronco 37) solo si lo pide

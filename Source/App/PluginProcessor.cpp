@@ -865,6 +865,17 @@ void MiguelMusicAssistantAudioProcessor::toggleCapture()
     captureState.store(2);
 }
 
+juce::File MiguelMusicAssistantAudioProcessor::recordingsFolder()
+{
+    auto desktop = juce::File::getSpecialLocation(juce::File::userDesktopDirectory);
+    const juce::File onedrive2("C:/Users/MIGUEL/OneDrive2/Desktop");
+    if (onedrive2.isDirectory())
+        desktop = onedrive2;
+    auto folder = desktop.getChildFile("grabaciones pichadaw");
+    folder.createDirectory();
+    return folder;
+}
+
 bool MiguelMusicAssistantAudioProcessor::takeCompletedCapture(juce::File& fileOut)
 {
     if (captureState.load() != 3)
@@ -887,11 +898,7 @@ bool MiguelMusicAssistantAudioProcessor::takeCompletedCapture(juce::File& fileOu
         captureWritten.store(0);
     }
 
-    auto folder = juce::File::getSpecialLocation(
-        juce::File::userDocumentsDirectory)
-        .getChildFile("Miguel Music Assistant")
-        .getChildFile("Grabaciones");
-    folder.createDirectory();
+    const auto folder = recordingsFolder();
     const auto destination = folder.getNonexistentChildFile(
         "Grabacion_" + juce::Time::getCurrentTime().formatted("%Y%m%d_%H%M%S"),
         ".wav", false);

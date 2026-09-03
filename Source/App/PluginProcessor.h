@@ -158,6 +158,7 @@ public:
     void toggleCapture();
     int getCaptureState() const { return captureState.load(); }
     bool takeCompletedCapture(juce::File& fileOut);
+    static juce::File recordingsFolder();
     void stopPreviews();
     void setSampleLooping(bool shouldLoop);
     void setSampleReversed(bool shouldReverse);

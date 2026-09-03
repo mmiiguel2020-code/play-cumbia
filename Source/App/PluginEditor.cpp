@@ -1730,10 +1730,7 @@ void MiguelMusicAssistantAudioProcessorEditor::exportMidi()
 
 void MiguelMusicAssistantAudioProcessorEditor::chooseSampleFiles()
 {
-    auto startFolder = juce::File::getSpecialLocation(
-        juce::File::userDocumentsDirectory)
-        .getChildFile("Miguel Music Assistant")
-        .getChildFile("Grabaciones");
+    auto startFolder = MiguelMusicAssistantAudioProcessor::recordingsFolder();
     if (!startFolder.isDirectory())
         startFolder = juce::File::getSpecialLocation(
             juce::File::userMusicDirectory);
@@ -1826,7 +1823,7 @@ void MiguelMusicAssistantAudioProcessorEditor::timerCallback()
     juce::File recorded;
     if (processor.takeCompletedCapture(recorded))
     {
-        importedSampleList.addOrReplaceLast(recorded);
+        importedSampleList.addFiles({ recorded });
         sampleInfo.setText("Grabado: " + recorded.getFileName(),
                            juce::dontSendNotification);
         capturePad.setMode(0);

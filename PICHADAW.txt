@@ -77,12 +77,11 @@ COMO SE GUARDA (audio)
 ----------------------
 El REC de la app escribe aqui:
 
-  Documents\Miguel Music Assistant\Grabaciones
+  Escritorio\grabaciones pichadaw
   (archivo Grabacion_FECHA_HORA.wav)
 
-La carpeta del Escritorio "grabaciones pichadaw" la usaste a mano. El codigo
-todavia NO graba ahi solo. Si quieres que REC vaya solo ahi, hay que
-cablearlo otra vez.
+Y esa toma entra en la lista de samples (fila nueva si hay hueco).
+No carga todos los wav de la carpeta al abrir.
 
 Sesion / autosave:
 
