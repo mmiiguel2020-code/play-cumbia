@@ -75,10 +75,11 @@ if(BAJXTER_BUILD_APP)
         FORMATS Standalone VST3
         PRODUCT_NAME "PICHADAW"
         ICON_BIG "${CMAKE_SOURCE_DIR}/Assets/PICHADAW.png"
-        IS_SYNTH FALSE
+        IS_SYNTH TRUE
         IS_MIDI_EFFECT FALSE
         NEEDS_MIDI_INPUT TRUE
         EDITOR_WANTS_KEYBOARD_FOCUS TRUE
+        VST3_CATEGORIES Instrument
     )
     target_sources(MiguelMusicAssistant PRIVATE
         ${BAJXTER_SHARED_SOURCES}

@@ -163,8 +163,13 @@ juce::String runPianoTuneCheck()
 
 MiguelMusicAssistantAudioProcessor::MiguelMusicAssistantAudioProcessor()
     : AudioProcessor(BusesProperties()
+#if JucePlugin_IsSynth
+        .withOutput("Output", juce::AudioChannelSet::stereo(), true)
+#else
         .withInput("Input", juce::AudioChannelSet::stereo(), true)
-        .withOutput("Output", juce::AudioChannelSet::stereo(), true))
+        .withOutput("Output", juce::AudioChannelSet::stereo(), true)
+#endif
+        )
 {
     formatManager.registerBasicFormats();
     shapedSource.setRack(&fxRack);
@@ -239,9 +244,15 @@ bool MiguelMusicAssistantAudioProcessor::isBusesLayoutSupported(
     const BusesLayout& layouts) const
 {
     const auto output = layouts.getMainOutputChannelSet();
-    return (output == juce::AudioChannelSet::mono()
-            || output == juce::AudioChannelSet::stereo())
-        && output == layouts.getMainInputChannelSet();
+    if (output != juce::AudioChannelSet::mono()
+        && output != juce::AudioChannelSet::stereo())
+        return false;
+#if JucePlugin_IsSynth
+    const auto input = layouts.getMainInputChannelSet();
+    return input.isDisabled() || input == output;
+#else
+    return output == layouts.getMainInputChannelSet();
+#endif
 }
 
 void MiguelMusicAssistantAudioProcessor::processBlock(

@@ -85,4 +85,32 @@ if ($key -eq "app" -or $key -eq "beta") {
     Write-Host "Instalado PICHADAW.exe (Escritorio y Programas) y PICHADAW.lnk"
 }
 
+if ($key -eq "vst3" -or $key -eq "beta") {
+    $vstSrc = Join-Path $build "MiguelMusicAssistant_artefacts\Release\VST3\PICHADAW.vst3"
+    if (-not (Test-Path -LiteralPath $vstSrc)) {
+        Write-Error "No salio PICHADAW.vst3"
+    }
+    $userVstDir = Join-Path $env:USERPROFILE "Documents\Miguel Music Assistant\VST3"
+    $userVst = Join-Path $userVstDir "PICHADAW.vst3"
+    New-Item -ItemType Directory -Force -Path $userVstDir | Out-Null
+    if (Test-Path -LiteralPath $userVst) {
+        Remove-Item -LiteralPath $userVst -Recurse -Force
+    }
+    Copy-Item -LiteralPath $vstSrc -Destination $userVst -Recurse -Force
+    Write-Host "VST3 usuario: $userVst"
+
+    $sysVst = "C:\Program Files\Common Files\VST3\PICHADAW.vst3"
+    try {
+        if (Test-Path -LiteralPath $sysVst) {
+            Remove-Item -LiteralPath $sysVst -Recurse -Force -ErrorAction Stop
+        }
+        Copy-Item -LiteralPath $vstSrc -Destination $sysVst -Recurse -Force -ErrorAction Stop
+        Write-Host "VST3 FL: $sysVst"
+    }
+    catch {
+        Write-Host "No pude copiar a Common Files (hace falta admin)."
+        Write-Host "Anade en FL la carpeta: $userVstDir"
+    }
+}
+
 exit 0

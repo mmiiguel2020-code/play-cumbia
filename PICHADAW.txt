@@ -1,0 +1,113 @@
+PICHADAW
+========
+Taller de samples para Windows. Hecho por Miguel. Repo: github.com/mmiiguel2020-code/play-cumbia
+
+QUE ES
+------
+Es DOS cosas del mismo programa (C++ / JUCE 8):
+
+1) APP  — PICHADAW.exe  (acceso del Escritorio: PICHADAW.lnk)
+2) PLUGIN VST3 — PICHADAW.vst3  (FL Studio u otro host)
+
+No es un DAW. No sustituye a FL. No es un plugin Fruity nativo (no es liviano
+como 3xOsc). Es el taller completo dentro de un VST3: samples, afinador, EQ,
+rack, piano, REC.
+
+QUE HACE
+--------
+- Hasta 16 samples (wav, mp3, aif, flac, ogg): varios a la vez, mute, volumen
+- Afinador y tono (0,5 cents por notch de rueda)
+- EQ de 7 bandas sobre lo que suena
+- Recorte inicio/final, fade, loop, reverse
+- Rack: HP, LP, compresor, excitador, duplicador, distorsion, delay, reverb,
+  volumen, velocity
+- Piano de referencia C4-C7 (seno). MIDI 60 = C4 = 261,63 Hz. FL a veces
+  etiqueta esa nota como C5
+- REC ~30 s de la mezcla
+
+QUE NO HACE
+-----------
+- Timeline de cancion, piano roll visible, cargar Serum/Valhalla
+- Host de VST ajenos
+- Mac / iOS
+- Acordeon MIDI (otro repo: Documents\acordeon-midi)
+
+DONDE ESTA CADA COSA
+--------------------
+Codigo:     Documents\play-cumbia
+App:        %LOCALAPPDATA%\Programs\Miguel Music Assistant\PICHADAW.exe
+Acceso:     Escritorio\PICHADAW.lnk  →  el exe de Programas
+Copia fria: Escritorio\PICHADAW-conservado\PICHADAW.exe
+            (version que te gusto; no la pises con compilar.ps1 app)
+VST3 FL:    C:\Program Files\Common Files\VST3\PICHADAW.vst3
+VST3 extra: Documents\Miguel Music Assistant\VST3\PICHADAW.vst3
+GitHub:     https://github.com/mmiiguel2020-code/play-cumbia
+
+INSTALAR (sin compilar)
+-----------------------
+Cierra PICHADAW y FL. En PowerShell:
+
+  cd C:\Users\MIGUEL\Documents\play-cumbia
+  .\instalar.ps1
+
+Eso copia el VST3 a Common Files y a Documentos, deja el acceso PICHADAW.lnk
+apuntando a Programas, y pone este texto en el Escritorio. No recompila.
+No pisa PICHADAW-conservado.
+
+Si Common Files pide admin, abre PowerShell como administrador y repite
+.\instalar.ps1
+
+FL STUDIO
+---------
+El VST3 es Synth / Instrument (no Fruity).
+
+1. Plugin manager → rescan VST3
+2. Categoria: Generador (no Efecto)
+3. Nombre: Installed\Generators\VST3\PICHADAW.fst
+4. Abrir con el + del Channel Rack
+
+Tambien puede ir como efecto en el mixer. No muevas el .vst3 a
+Plugins\Fruity\Generators. No copies el .vst3 a dos sitios: FL veria dos.
+
+Si FL lo deja pegado en Effects, NO renombres Effects→Generators en la
+casilla. Arrastra PICHADAW a Generators y borra el atajo viejo de Effects
+(eso borra el .fst de FL, no el plugin).
+
+COMO SE GUARDA (audio)
+----------------------
+El REC de la app escribe aqui:
+
+  Documents\Miguel Music Assistant\Grabaciones
+  (archivo Grabacion_FECHA_HORA.wav)
+
+La carpeta del Escritorio "grabaciones pichadaw" la usaste a mano. El codigo
+todavia NO graba ahi solo. Si quieres que REC vaya solo ahi, hay que
+cablearlo otra vez.
+
+Sesion / autosave:
+
+  %APPDATA%\Miguel Music Assistant\Sessions\autosave.mmas
+
+COMPILAR (solo si cambias codigo)
+---------------------------------
+Hace falta VS 2022 (C++), CMake, Git. JUCE se baja una vez.
+
+  cd Documents\play-cumbia
+  .\compilar.ps1 app     →  PICHADAW.exe (PISA el exe de Programas y Escritorio)
+  .\compilar.ps1 vst3    →  solo el plugin (no pisa el exe)
+  .\compilar.ps1 delay   →  un FX Bajxter
+
+No compiles los 13 por costumbre.
+Si quieres conservar la app que ya te gusto: no uses "app"; usa el exe de
+PICHADAW-conservado.
+
+ACCESOS DEL ESCRITORIO
+----------------------
+DEJA:     PICHADAW.lnk
+DEJA:     carpeta PICHADAW-conservado
+BORRA si ves nombres viejos: Bajxterbeta, Bajxter Producer, Miguel Music Assistant
+EL EXE suelto PICHADAW.exe en el Escritorio es copia; el bueno es el .lnk
+          (apunta a Programas). Puedes borrar el .exe del Escritorio si te
+          estorba; no borres el .lnk.
+
+Este archivo (PICHADAW.txt) puede vivir en el Escritorio. No es un acceso.
